@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartera de Inversión — Dashboard v9 Final</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+  :root{
+    --bg:#0d0f14;--surface:#13161e;--surface2:#1a1e28;--border:#252a38;
+    --accent:#4ade80;--accent2:#38bdf8;--red:#f87171;--yellow:#fbbf24;
+    --text:#e2e8f0;--muted:#64748b;--muted2:#94a3b8;
+    --font-mono:'DM Mono',monospace;--font-sans:'Syne',sans-serif
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:14px;min-height:100vh}
+
+  /* HEADER */
+  .header{padding:20px 32px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .header-left h1{font-size:20px;font-weight:800;letter-spacing:-.5px;color:#fff}
+  .header-left p{color:var(--muted);font-size:11px;margin-top:2px;font-family:var(--font-mono)}
+  .header-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* TABS */
+  .tabs{display:flex;border-bottom:1px solid var(--border);padding:0 32px;background:var(--bg)}
+  .tab{padding:12px 20px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);font-weight:600;font-size:13px;transition:all .15s;white-space:nowrap}
+  .tab:hover{color:var(--text)}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+
+  /* BUTTONS */
+  .btn{padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-family:var(--font-sans);font-weight:600;font-size:12px;transition:all .15s}
+  .btn-primary{background:var(--accent);color:#000}.btn-primary:hover{background:#22c55e}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--muted)}
+  .btn-danger{background:#7f1d1d;color:var(--red);border:1px solid #991b1b}
+  .btn-sm{padding:3px 8px;font-size:11px}
+
+  /* SUMMARY */
+  .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:16px 32px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .card-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-family:var(--font-mono)}
+  .card-value{font-size:20px;font-weight:700;margin-top:4px;font-family:var(--font-mono)}
+  .card-value.pos{color:var(--accent)}.card-value.neg{color:var(--red)}.card-value.neutral{color:var(--accent2)}
+  .card-sub{font-size:10px;color:var(--muted2);margin-top:3px;font-family:var(--font-mono)}
+
+  /* TOOLBAR */
+  .toolbar{padding:10px 32px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+  .search-box{flex:1;min-width:180px;padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px}
+  .search-box:focus{outline:none;border-color:var(--accent)}
+  select.filter-select{padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;cursor:pointer}
+
+  /* TABLE POSICIONES */
+  .table-wrap{overflow-x:auto;padding:0 32px 24px}
+  table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px}
+  thead th{padding:9px 7px;text-align:right;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}
+  thead th:first-child,thead th:nth-child(2),thead th:nth-child(3),thead th:nth-child(4){text-align:left}
+  thead th:hover{color:var(--text)}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+  tbody tr:hover{background:var(--surface)}
+  tbody td{padding:8px 7px;text-align:right;color:var(--muted2);vertical-align:middle}
+  tbody td:first-child,tbody td:nth-child(2),tbody td:nth-child(3),tbody td:nth-child(4){text-align:left}
+  .ticker-badge{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-weight:500;color:var(--accent2);font-size:11px}
+  .sector-pill{display:inline-block;border-radius:20px;padding:2px 7px;font-size:10px;font-weight:500}
+  .pos-val{color:var(--accent)}.neg-val{color:var(--red)}
+  .weight-bar-wrap{display:flex;align-items:center;gap:5px;justify-content:flex-end}
+  .weight-bar{height:3px;border-radius:2px;background:var(--accent);opacity:.7;min-width:2px}
+  .actions-cell{display:flex;gap:3px;justify-content:flex-end}
+
+  /* CHARTS */
+  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 32px 16px}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .chart-title{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+  .donut-wrap{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+  .donut-legend{flex:1;min-width:100px}
+  .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:10px}
+  .legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .legend-name{color:var(--muted2);flex:1}.legend-pct{color:var(--text);font-weight:500}
+  .bars-list{display:flex;flex-direction:column;gap:6px}
+  .bar-row{display:flex;align-items:center;gap:7px;font-size:10px}
+  .bar-label{width:70px;color:var(--muted2);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;flex-shrink:0}
+  .bar-outer{flex:1;height:5px;background:var(--bg);border-radius:3px;overflow:hidden}
+  .bar-inner{height:100%;border-radius:3px;background:var(--accent2)}
+  .bar-val{width:55px;text-align:right;color:var(--muted2)}
+
+  /* DIV SUMMARY */
+  .div-summary{padding:0 32px 16px;display:grid;grid-template-columns:1fr 2fr;gap:12px}
+  .div-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .div-card h3{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:7px}
+  .div-top{display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto}
+  .div-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border);font-family:var(--font-mono)}
+  .div-row:last-child{border-bottom:none}
+
+  /* MODALES */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;position:relative}
+  .modal h2{font-size:16px;font-weight:700;margin-bottom:16px}
+  .modal-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px}
+  .form-row{margin-bottom:12px}
+  .form-row label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+  .form-row input,.form-row select,.form-row textarea{width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px}
+  .form-row input:focus,.form-row select:focus,.form-row textarea:focus{outline:none;border-color:var(--accent)}
+  .form-2col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+  .note{font-size:10px;color:var(--yellow);margin-top:5px;padding:7px;background:rgba(251,191,36,.08);border-radius:4px;border-left:2px solid var(--yellow)}
+
+  /* FUNDAMENTALES */
+  .fund-header{padding:14px 32px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+  .fund-meta{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+  .fund-table-wrap{overflow-x:auto;padding:0 32px 32px}
+  .fund-table{width:100%;font-size:11px;font-family:var(--font-mono);border-collapse:collapse}
+  .fund-table th{padding:9px 7px;background:var(--surface2);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border:1px solid var(--border);text-align:right;white-space:nowrap}
+  .fund-table th:first-child,.fund-table th:nth-child(2){text-align:left}
+  .fund-table td{padding:7px;border:1px solid var(--border);text-align:right}
+  .fund-table td:first-child{text-align:left;color:var(--accent2);font-weight:500}
+  .fund-table td:nth-child(2){text-align:left;color:var(--muted2);font-size:10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fund-table tbody tr:hover{background:var(--surface)}
+  .cg{background:rgba(74,222,128,.12);color:#4ade80}
+  .cw{background:rgba(251,191,36,.12);color:#fbbf24}
+  .cb{background:rgba(248,113,113,.12);color:#f87171}
+  .cn{color:var(--muted)}
+  .loading-state{text-align:center;padding:40px;color:var(--muted);font-family:var(--font-mono);font-size:12px}
+  .spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .legend-color-key{display:flex;gap:16px;padding:10px 32px;font-size:11px;font-family:var(--font-mono);flex-wrap:wrap}
+  .ck{display:flex;align-items:center;gap:5px}
+  .ck-dot{width:10px;height:10px;border-radius:2px}
+
+  @media(max-width:768px){
+    .charts-row,.div-summary{grid-template-columns:1fr}
+    .summary-grid,.table-wrap,.toolbar,.header,.charts-row,.div-summary,.fund-header,.fund-table-wrap,.legend-color-key{padding-left:16px;padding-right:16px}
+    .tabs{padding:0 16px;overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+
+<!-- MODALES -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('editModal')">✕</button>
+    <h2 id="editModalTitle">Añadir posición</h2>
+    <div class="form-2col">
+      <div class="form-row"><label>Ticker</label><input id="f-ticker" placeholder="Ej: JNJ" style="text-transform:uppercase"></div>
+      <div class="form-row"><label>Nombre</label><input id="f-name" placeholder="Nombre"></div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row"><label>Sector</label>
+        <select id="f-sector"><option>Tecnología</option><option>Salud</option><option>Energía</option><option>Consumo Defensivo</option><option>Consumo Cíclico</option><option>Financiero</option><option>Industrial</option><option>Utilities</option><option>Inmobiliario</option><option>Telecomunicaciones</option><option>Materiales</option><option>ETF Global</option><option>Bonos</option></select>
+      </div>
+      <div class="form-row"><label>País</label>
+        <select id="f-country"><option>USA</option><option>España</option><option>UK</option><option>Canadá</option><option>Alemania</option><option>Francia</option><option>Irlanda</option><option>Global</option></select>
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row"><label>Divisa</label>
+        <select id="f-currency">
+          <option value="EUR">EUR €</option><option value="USD">USD $</option>
+          <option value="GBP">GBP £</option><option value="CAD">CAD $</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Acciones</label><input id="f-shares" type="number" step="0.001" placeholder="100"></div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row"><label>Precio compra (moneda local)</label><input id="f-avgcost" type="number" step="0.0001" placeholder="0.00"></div>
+      <div class="form-row">
+        <label>Precio actual (moneda local)</label>
+        <input id="f-price" type="number" step="0.0001" placeholder="0.00">
+        <div class="note" id="gbp-note" style="display:none">⚠️ GBP en libras. Si Yahoo muestra 265p → introduce 2.65</div>
+      </div>
+    </div>
+    <div class="form-row"><label>Dividendos cobrados (€)</label><input id="f-divs" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="form-row"><label>Comentario</label><textarea id="f-comment" rows="2" placeholder="Tesis, notas..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('editModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="savePosition()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="priceModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('priceModal')">✕</button>
+    <h2>✎ Actualizar precios</h2>
+    <p style="color:var(--muted);font-size:11px;margin-bottom:8px">Formato: <code style="color:var(--accent2)">TICKER: precio</code> — en moneda local del activo.</p>
+    <div class="note">⚠️ <strong>UK (GBP):</strong> ABF.GB, BATS.GB, DGE.GB, LGEN.GB, PETS.GB cotizan en peniques en Yahoo. Si introduces >100, se divide entre 100 automáticamente.</div>
+    <div class="form-row" style="margin-top:10px"><label>Precios</label>
+      <textarea id="price-input" rows="12" placeholder="CABK.ES: 10.50&#10;TEF.ES: 3.86&#10;LGEN.GB: 2.38&#10;BATS.GB: 26.80&#10;MO: 55.80&#10;..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('priceModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="applyPrices()">Aplicar precios</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="max-width:340px;text-align:center">
+    <h2 style="color:var(--red)">Eliminar posición</h2>
+    <p style="color:var(--muted2);margin:10px 0">¿Seguro que quieres eliminar <strong id="delete-ticker-name"></strong>?</p>
+    <div class="modal-actions" style="justify-content:center">
+      <button class="btn btn-secondary" onclick="closeModal('deleteModal')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <h1>📊 Cartera de Inversión</h1>
+    <p id="header-sub">v9 · Cargando...</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-secondary" onclick="openPriceModal()">✎ Precios</button>
+    <button class="btn btn-secondary" onclick="exportCSV()">⬇ CSV</button>
+    <button class="btn btn-primary" onclick="openAddModal()">+ Posición</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" id="tab-posiciones" onclick="switchTab('posiciones',this)">Mis posiciones</div>
+  <div class="tab" id="tab-fundamentales" onclick="switchTab('fundamentales',this)">Análisis fundamental</div>
+</div>
+
+<!-- TAB 1: POSICIONES -->
+<div id="posiciones-tab" class="tab-content active">
+
+  <div class="summary-grid" id="summary-grid"></div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">Distribución sectorial</div>
+      <div class="donut-wrap">
+        <canvas id="donutChart" width="110" height="110" style="flex-shrink:0"></canvas>
+        <div class="donut-legend" id="donut-legend"></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Top 15 posiciones por valor</div>
+      <div class="bars-list" id="bars-chart"></div>
+    </div>
+  </div>
+
+  <div class="div-summary">
+    <div class="div-card">
+      <h3>Top dividendos cobrados</h3>
+      <div class="div-top" id="div-top"></div>
+    </div>
+    <div class="div-card">
+      <h3>Dividendos por sector</h3>
+      <div class="div-top" id="div-sector"></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search-box" type="text" id="search-box" placeholder="🔍 Buscar ticker o nombre..." oninput="renderTable()">
+    <select class="filter-select" id="filter-sector" onchange="renderTable()"><option value="">Todos los sectores</option></select>
+    <select class="filter-select" id="filter-country" onchange="renderTable()"><option value="">Todos los países</option></select>
+    <select class="filter-select" id="sort-by" onchange="renderTable()">
+      <option value="value-desc">Mayor valor</option>
+      <option value="value-asc">Menor valor</option>
+      <option value="pnl-desc">Mayor plusvalía %</option>
+      <option value="pnl-asc">Menor plusvalía %</option>
+      <option value="div-desc">Mayor dividendo</option>
+      <option value="ticker-asc">Ticker A→Z</option>
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Ticker</th><th>Nombre</th><th>Sector</th><th>País</th>
+          <th>Acc.</th><th>P.Medio€</th><th>Invertido€</th><th>P.Act€</th>
+          <th>Valor€</th><th>+/-€</th><th>+/-%</th><th>Divid.€</th><th>Peso</th><th>⚙</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- TAB 2: ANÁLISIS FUNDAMENTAL -->
+<div id="fundamentales-tab" class="tab-content">
+
+  <div class="fund-header">
+    <div>
+      <p style="font-size:15px;font-weight:700;margin-bottom:3px">Análisis Fundamental — vía Anthropic + FMP</p>
+      <p class="fund-meta" id="fund-meta">Sin datos. Introduce tu API Key de Anthropic y haz clic en Actualizar.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div>
+        <input id="fmp-key" type="password" placeholder="sk-ant-... (API Key de Anthropic)" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;width:280px">
+        <p style="font-size:10px;color:var(--muted);margin-top:3px">Obtén tu key en <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent2)">console.anthropic.com</a> → API Keys</p>
+      </div>
+      <button class="btn btn-primary" onclick="updateFundamentals()">🔄 Actualizar fundamentales</button>
+    </div>
+  </div>
+
+  <div class="legend-color-key">
+    <span class="ck"><span class="ck-dot cg" style="background:rgba(74,222,128,.3)"></span>Bueno</span>
+    <span class="ck"><span class="ck-dot cw" style="background:rgba(251,191,36,.3)"></span>Neutral</span>
+    <span class="ck"><span class="ck-dot cb" style="background:rgba(248,113,113,.3)"></span>Cuidado</span>
+    <span class="ck"><span style="color:var(--muted);font-size:11px">— = Sin datos</span></span>
+    <span style="font-size:10px;color:var(--muted);margin-left:8px">Datos de mercado vía Financial Modeling Prep · Procesados por Claude</span>
+  </div>
+
+  <div id="fund-loading" class="loading-state" style="display:none">
+    <div class="spinner"></div>
+    <p>Consultando FMP para <span id="fund-progress">0</span> / <span id="fund-total">0</span> acciones...</p>
+    <p style="font-size:10px;margin-top:6px;color:var(--muted)">Esto puede tardar 30–90 segundos</p>
+  </div>
+
+  <div id="fund-empty" class="loading-state">
+    <p>Introduce tu API Key de FMP y haz clic en "🔄 Actualizar fundamentales"</p>
+    <p style="font-size:10px;margin-top:6px">Registro gratuito en <a href="https://financialmodelingprep.com" target="_blank" style="color:var(--accent2)">financialmodelingprep.com</a></p>
+  </div>
+
+  <div class="fund-table-wrap" style="display:none" id="fund-table-wrap">
+    <table class="fund-table">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Nombre</th>
+          <th title="P/E ratio actual (TTM)">P/E</th>
+          <th title="EV / EBITDA">EV/EBITDA</th>
+          <th title="Return on Equity %">ROE %</th>
+          <th title="Debt to Equity">D/E</th>
+          <th title="Deuda Neta / EBITDA">DN/EBITDA</th>
+          <th title="Revenue Growth YoY %">Rev Gr%</th>
+          <th title="Free Cash Flow Growth %">FCF Gr%</th>
+          <th title="Dividend Yield %">Div Yld%</th>
+          <th title="Payout Ratio %">Payout%</th>
+        </tr>
+      </thead>
+      <tbody id="fund-tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATOS REALES DE CARTERA (hardcoded)
+// ══════════════════════════════════════════════
+const DATA_KEY = 'portfolio_v9_mario';
+const FX = {USD:0.918, GBP:1.173, EUR:1.0, CAD:0.676};
+const GBP_PENNY = {ABF_GB:1, BATS_GB:1, DGE_GB:1, LGEN_GB:1, PETS_GB:1};
+const isPenny = t => GBP_PENNY[t.replace('.','_')] || false;
+const COLORS = {
+  'Tecnología':'#60a5fa','Salud':'#a78bfa','Energía':'#f59e0b',
+  'Consumo Defensivo':'#4ade80','Consumo Cíclico':'#fb923c','Financiero':'#38bdf8',
+  'Industrial':'#94a3b8','Utilities':'#34d399','Inmobiliario':'#f472b6',
+  'Telecomunicaciones':'#facc15','Materiales':'#a3e635','ETF Global':'#e879f9','Bonos':'#71717a'
+};
+
+const DEFAULTS = [
+  {ticker:'CABK.ES',name:'CaixaBank',sector:'Financiero',country:'España',currency:'EUR',shares:1400,avgCost:5.22,price:10.50,dividends:1393.00,comment:'Mayor posición española. Vigilar morosidad.'},
+  {ticker:'TEF.ES',name:'Telefónica',sector:'Telecomunicaciones',country:'España',currency:'EUR',shares:2103,avgCost:4.05,price:3.86,dividends:1088.40,comment:'Alta rentabilidad dividendo. Deuda elevada.'},
+  {ticker:'LOG.ES',name:'Logista',sector:'Consumo Defensivo',country:'España',currency:'EUR',shares:260,avgCost:27.15,price:32.80,dividends:1042.60,comment:'Distribución tabaco. Dividendo creciente.'},
+  {ticker:'FAE.ES',name:'Faes Farma',sector:'Salud',country:'España',currency:'EUR',shares:2814,avgCost:3.42,price:3.38,dividends:939.87,comment:'Pharma española. Dividendo generoso.'},
+  {ticker:'ENG.ES',name:'Enagás',sector:'Energía',country:'España',currency:'EUR',shares:455,avgCost:16.80,price:15.38,dividends:812.73,comment:'Regulada. Dividendo en revisión.'},
+  {ticker:'LGEN.GB',name:'Legal & General',sector:'Financiero',country:'UK',currency:'GBP',shares:1860,avgCost:2.18,price:2.38,dividends:800.42,comment:'Aseguradora UK. Dividendo muy alto.'},
+  {ticker:'MO',name:'Altria Group',sector:'Consumo Defensivo',country:'USA',currency:'USD',shares:100,avgCost:44.20,price:55.80,dividends:733.65,comment:'Tabaco USA. Dividendo máximo. Riesgo regulatorio.'},
+  {ticker:'MAP.ES',name:'Mapfre',sector:'Financiero',country:'España',currency:'EUR',shares:2200,avgCost:2.28,price:3.90,dividends:710.03,comment:'Aseguradora española. Dividendo estable.'},
+  {ticker:'SAN.ES',name:'Banco Santander',sector:'Financiero',country:'España',currency:'EUR',shares:2877,avgCost:3.72,price:10.20,dividends:604.18,comment:'Banco global. Fuerte revalorización.'},
+  {ticker:'RED.ES',name:'Redeia (REE)',sector:'Utilities',country:'España',currency:'EUR',shares:300,avgCost:16.00,price:16.80,dividends:540.00,comment:'Red eléctrica regulada.'},
+  {ticker:'VZ',name:'Verizon',sector:'Telecomunicaciones',country:'USA',currency:'USD',shares:115,avgCost:40.80,price:42.80,dividends:486.34,comment:'Telecom USA. Dividendo alto, crecimiento nulo.'},
+  {ticker:'ENB',name:'Enbridge',sector:'Energía',country:'Canadá',currency:'USD',shares:100,avgCost:36.50,price:37.50,dividends:484.72,comment:'Midstream canadiense. Dividendo creciente 28 años.'},
+  {ticker:'REP.ES',name:'Repsol',sector:'Energía',country:'España',currency:'EUR',shares:170,avgCost:12.85,price:22.53,dividends:358.65,comment:'Oil&gas integrada. Dividendo scrip+efectivo.'},
+  {ticker:'PFE',name:'Pfizer',sector:'Salud',country:'USA',currency:'USD',shares:157,avgCost:36.20,price:24.50,dividends:350.23,comment:'Pharma. Minusvalía fuerte. Dividendo en riesgo.'},
+  {ticker:'BATS.GB',name:'British American Tobacco',sector:'Consumo Defensivo',country:'UK',currency:'GBP',shares:231,avgCost:25.38,price:26.80,dividends:347.70,comment:'Tabaco UK. Altísimo dividendo.'},
+  {ticker:'UGI',name:'UGI Corporation',sector:'Utilities',country:'USA',currency:'USD',shares:145,avgCost:30.20,price:20.80,dividends:328.22,comment:'Gas distribución. Minusvalía alta.'},
+  {ticker:'MPT',name:'Medical Properties Trust',sector:'Inmobiliario',country:'USA',currency:'USD',shares:400,avgCost:10.80,price:4.10,dividends:296.94,comment:'REIT hospitalario. Gran minusvalía.'},
+  {ticker:'BMY',name:'Bristol-Myers Squibb',sector:'Salud',country:'USA',currency:'USD',shares:85,avgCost:50.20,price:51.80,dividends:282.22,comment:'Pharma. Pipeline fuerte.'},
+  {ticker:'TROW',name:'T. Rowe Price',sector:'Financiero',country:'USA',currency:'USD',shares:30,avgCost:117.50,price:90.50,dividends:273.25,comment:'Gestora activa. Presión flujos a pasiva.'},
+  {ticker:'O',name:'Realty Income',sector:'Inmobiliario',country:'USA',currency:'USD',shares:94,avgCost:57.20,price:56.20,dividends:262.89,comment:'REIT triple neto. Dividendo mensual.'},
+  {ticker:'PM',name:'Philip Morris Intl',sector:'Consumo Defensivo',country:'USA',currency:'USD',shares:25,avgCost:99.50,price:168.00,dividends:227.05,comment:'Tabaco global. IQOS creciendo fuerte.'},
+  {ticker:'OHI',name:'Omega Healthcare Investors',sector:'Inmobiliario',country:'USA',currency:'USD',shares:45,avgCost:32.80,price:36.80,dividends:219.24,comment:'REIT SNF. Dividendo estable.'},
+  {ticker:'NTGY.ES',name:'Naturgy',sector:'Energía',country:'España',currency:'EUR',shares:35,avgCost:24.50,price:26.78,dividends:196.00,comment:'Gas+electricidad. OPA latente.'},
+  {ticker:'VICI',name:'VICI Properties',sector:'Inmobiliario',country:'USA',currency:'USD',shares:116,avgCost:29.50,price:30.50,dividends:185.11,comment:'REIT gaming. Contratos triple neto.'},
+  {ticker:'PETS.GB',name:'Pets at Home Group',sector:'Consumo Cíclico',country:'UK',currency:'GBP',shares:500,avgCost:3.35,price:2.65,dividends:182.93,comment:'Retail mascotas UK. Dividendo semestral.'},
+  {ticker:'EBRO.ES',name:'Ebro Foods',sector:'Consumo Defensivo',country:'España',currency:'EUR',shares:125,avgCost:15.80,price:19.22,dividends:140.00,comment:'Alimentación. Dividendo estable.'},
+  {ticker:'TXN',name:'Texas Instruments',sector:'Tecnología',country:'USA',currency:'USD',shares:13,avgCost:165.00,price:183.00,dividends:127.30,comment:'Semiconductores analógicos. Capital allocation excelente.'},
+  {ticker:'HRL',name:'Hormel Foods',sector:'Consumo Defensivo',country:'USA',currency:'USD',shares:122,avgCost:43.50,price:28.50,dividends:123.23,comment:'Dividend King. Gran minusvalía.'},
+  {ticker:'QQQX',name:'Nuveen NAS100 Dynamic OW',sector:'ETF Global',country:'USA',currency:'USD',shares:69,avgCost:23.80,price:30.20,dividends:111.37,comment:'CEF covered call QQQ.'},
+  {ticker:'BKH',name:'Black Hills Corp',sector:'Utilities',country:'USA',currency:'USD',shares:38,avgCost:63.20,price:56.20,dividends:101.97,comment:'Utility regulada. 52 años dividendo creciente.'},
+  {ticker:'PEP',name:'PepsiCo',sector:'Consumo Defensivo',country:'USA',currency:'USD',shares:8,avgCost:175.00,price:131.50,dividends:78.64,comment:'Consumo global. Dividend King.'},
+  {ticker:'MRK',name:'Merck & Co',sector:'Salud',country:'USA',currency:'USD',shares:25,avgCost:96.00,price:78.50,dividends:75.01,comment:'Pharma. Keytruda. Patent cliff 2028.'},
+  {ticker:'LYB',name:'LyondellBasell',sector:'Materiales',country:'USA',currency:'USD',shares:15,avgCost:82.00,price:52.00,dividends:74.16,comment:'Química/plásticos. Alto dividendo cíclico.'},
+  {ticker:'WTRG',name:'Essential Utilities',sector:'Utilities',country:'USA',currency:'USD',shares:65,avgCost:37.11,price:35.20,dividends:63.85,comment:'Utility agua. Crecimiento lento y predecible.'},
+  {ticker:'DNP',name:'DNP Select Income Fund',sector:'Bonos',country:'USA',currency:'USD',shares:165,avgCost:9.58,price:9.10,dividends:56.19,comment:'CEF renta fija. Distribución mensual.'},
+  {ticker:'JNJ',name:'Johnson & Johnson',sector:'Salud',country:'USA',currency:'USD',shares:12,avgCost:162.00,price:152.00,dividends:49.67,comment:'Dividend King. Salud pura.'},
+  {ticker:'ES',name:'Eversource Energy',sector:'Utilities',country:'USA',currency:'USD',shares:17,avgCost:60.50,price:55.40,dividends:45.35,comment:'Utility NE USA. Reestructuración.'},
+  {ticker:'ADP',name:'ADP',sector:'Tecnología',country:'USA',currency:'USD',shares:4,avgCost:240.00,price:213.00,dividends:40.24,comment:'Payroll/HR SaaS. Calidad premium.'},
+  {ticker:'ABF.GB',name:'Associated British Foods',sector:'Consumo Defensivo',country:'UK',currency:'GBP',shares:231,avgCost:20.71,price:18.70,dividends:23.96,comment:'Primark + alimentos.'},
+  {ticker:'GIS',name:'General Mills',sector:'Consumo Defensivo',country:'USA',currency:'USD',shares:9,avgCost:68.00,price:48.20,dividends:20.64,comment:'Alimentación. Dividend Aristocrat.'},
+  {ticker:'UTF',name:'Cohen & Steers Infra Fund',sector:'ETF Global',country:'USA',currency:'USD',shares:20,avgCost:26.50,price:27.40,dividends:17.24,comment:'CEF infraestructura global.'},
+  {ticker:'MPV',name:'Barings Participation Inv',sector:'Bonos',country:'USA',currency:'USD',shares:90,avgCost:19.80,price:17.50,dividends:9.51,comment:'CEF renta fija/préstamos.'},
+  {ticker:'SPG',name:'Simon Property Group',sector:'Inmobiliario',country:'USA',currency:'USD',shares:4,avgCost:145.00,price:169.00,dividends:9.36,comment:'Mayor REIT retail USA.'},
+  {ticker:'JEQP.DE',name:'JPMorgan Global Eq Premium ETF',sector:'ETF Global',country:'Alemania',currency:'EUR',shares:115,avgCost:22.10,price:23.50,dividends:0,comment:'ETF covered call global.'},
+  {ticker:'JGPI.DE',name:'JPMorgan Nasdaq Eq Prem ETF',sector:'ETF Global',country:'Alemania',currency:'EUR',shares:75,avgCost:24.20,price:25.80,dividends:0,comment:'ETF covered call Nasdaq.'},
+  {ticker:'TRET.DE',name:'VanEck Global Real Estate ETF',sector:'Inmobiliario',country:'Alemania',currency:'EUR',shares:40,avgCost:38.50,price:40.20,dividends:0,comment:'ETF REITs globales.'},
+  {ticker:'XDEQ.DE',name:'Xtrackers MSCI World Quality ETF',sector:'ETF Global',country:'Alemania',currency:'EUR',shares:5,avgCost:72.00,price:75.40,dividends:0,comment:'ETF global calidad.'},
+  {ticker:'CHY',name:'Calvert High Dividend Eq',sector:'ETF Global',country:'USA',currency:'USD',shares:40,avgCost:10.80,price:10.60,dividends:0,comment:'CEF dividendos USA.'},
+  {ticker:'EFT',name:'Eaton Vance Floating Rate',sector:'Bonos',country:'USA',currency:'USD',shares:35,avgCost:14.20,price:10.95,dividends:0,comment:'CEF renta fija flotante.'},
+  {ticker:'HYT',name:'BlackRock Corp High Yield',sector:'Bonos',country:'USA',currency:'USD',shares:30,avgCost:10.20,price:9.20,dividends:0,comment:'CEF high yield mensual.'},
+  {ticker:'PTY',name:'PIMCO Corp & Income Strat',sector:'Bonos',country:'USA',currency:'USD',shares:30,avgCost:14.50,price:13.10,dividends:0,comment:'CEF PIMCO mensual.'},
+  {ticker:'DGE.GB',name:'Diageo',sector:'Consumo Defensivo',country:'UK',currency:'GBP',shares:111,avgCost:22.50,price:15.20,dividends:0,comment:'Bebidas premium. Minusvalía. Scrip dividend.'},
+  {ticker:'VIS.ES',name:'Viscofán',sector:'Materiales',country:'España',currency:'EUR',shares:41,avgCost:58.00,price:50.40,dividends:0,comment:'Envolturas cárnicas. Nicho global.'}
+];
+
+// ══════════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════════
+let positions = [];
+let editingId = null, deletingId = null;
+
+function loadData(){
+  const s = localStorage.getItem(DATA_KEY);
+  if(s){ positions = JSON.parse(s); }
+  else { positions = DEFAULTS.map((p,i) => ({...p, id:i+1})); saveData(); }
+}
+function saveData(){ localStorage.setItem(DATA_KEY, JSON.stringify(positions)); }
+
+// ══════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════
+function switchTab(tab, el){
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(tab+'-tab').classList.add('active');
+  el.classList.add('active');
+  if(tab === 'fundamentales') renderFundamentals();
+}
+
+// ══════════════════════════════════════════════
+// CÁLCULOS
+// ══════════════════════════════════════════════
+function calc(p){
+  const fx = FX[p.currency]||1;
+  const invested = p.shares * p.avgCost * fx;
+  const currentValue = p.shares * p.price * fx;
+  const pnl = currentValue - invested;
+  const pnlPct = invested > 0 ? (pnl/invested)*100 : 0;
+  const totalReturn = pnl + (p.dividends||0);
+  const totalReturnPct = invested > 0 ? (totalReturn/invested)*100 : 0;
+  return {...p, invested, currentValue, pnl, pnlPct, totalReturn, totalReturnPct,
+    priceEUR: p.price*fx, avgCostEUR: p.avgCost*fx};
+}
+function totalVal(){ return positions.reduce((s,p) => s+calc(p).currentValue, 0); }
+function fmt0(n){ return Math.abs(n).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+function fmt2(n){ return parseFloat(n).toFixed(2); }
+function fmtPct(n){ return (n>=0?'+':'')+n.toFixed(2)+'%'; }
+
+// ══════════════════════════════════════════════
+// RENDER POSICIONES
+// ══════════════════════════════════════════════
+function renderSummary(){
+  const cs = positions.map(calc);
+  const tI = cs.reduce((s,c) => s+c.invested, 0);
+  const tV = cs.reduce((s,c) => s+c.currentValue, 0);
+  const tPnl = tV-tI, tPnlP = tI>0?(tPnl/tI)*100:0;
+  const tDiv = cs.reduce((s,c) => s+(c.dividends||0), 0);
+  const tRet = tPnl+tDiv, tRetP = tI>0?(tRet/tI)*100:0;
+  const best = cs.reduce((b,c) => c.pnlPct>b.pnlPct?c:b, cs[0]);
+  const worst = cs.reduce((b,c) => c.pnlPct<b.pnlPct?c:b, cs[0]);
+  const f = n => '€'+fmt0(n);
+  document.getElementById('summary-grid').innerHTML = `
+    <div class="card"><div class="card-label">Capital invertido</div><div class="card-value neutral">${f(tI)}</div><div class="card-sub">${positions.length} posiciones</div></div>
+    <div class="card"><div class="card-label">Valor actual</div><div class="card-value neutral">${f(tV)}</div></div>
+    <div class="card"><div class="card-label">Plusvalía latente</div><div class="card-value ${tPnl>=0?'pos':'neg'}">${(tPnl<0?'-':'')+f(tPnl)}</div><div class="card-sub">${fmtPct(tPnlP)}</div></div>
+    <div class="card"><div class="card-label">Dividendos cobrados</div><div class="card-value pos">${f(tDiv)}</div></div>
+    <div class="card"><div class="card-label">Rentabilidad total</div><div class="card-value ${tRet>=0?'pos':'neg'}">${(tRet<0?'-':'')+f(Math.abs(tRet))}</div><div class="card-sub">${fmtPct(tRetP)}</div></div>
+    <div class="card"><div class="card-label">Mejor posición</div><div class="card-value pos" style="font-size:15px">${best?.ticker||'—'}</div><div class="card-sub">${best?fmtPct(best.pnlPct):''}</div></div>
+    <div class="card"><div class="card-label">Peor posición</div><div class="card-value neg" style="font-size:15px">${worst?.ticker||'—'}</div><div class="card-sub">${worst?fmtPct(worst.pnlPct):''}</div></div>
+  `;
+  document.getElementById('header-sub').textContent = `v9 · ${new Date().toLocaleDateString('es-ES')} · ${positions.length} posiciones · USD=${FX.USD} GBP=${FX.GBP}`;
+}
+
+function renderCharts(){
+  const cs = positions.map(calc);
+  const tV = cs.reduce((s,c) => s+c.currentValue, 0);
+  const sMap = {};
+  cs.forEach(c => { sMap[c.sector] = (sMap[c.sector]||0) + c.currentValue; });
+  const sArr = Object.entries(sMap).sort((a,b) => b[1]-a[1]);
+  const canvas = document.getElementById('donutChart');
+  const ctx = canvas.getContext('2d');
+  const cx=55, cy=55, r=44, ir=24;
+  ctx.clearRect(0,0,110,110);
+  let ang = -Math.PI/2;
+  sArr.forEach(([s,v]) => {
+    const sl = (v/tV)*2*Math.PI;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,ang,ang+sl);
+    ctx.fillStyle = COLORS[s]||'#888'; ctx.fill(); ang += sl;
+  });
+  ctx.beginPath(); ctx.arc(cx,cy,ir,0,2*Math.PI);
+  ctx.fillStyle = '#0d0f14'; ctx.fill();
+  document.getElementById('donut-legend').innerHTML = sArr.slice(0,8).map(([s,v]) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${COLORS[s]||'#888'}"></div><span class="legend-name">${s}</span><span class="legend-pct">${((v/tV)*100).toFixed(1)}%</span></div>`
+  ).join('');
+  const top15 = [...cs].sort((a,b) => b.currentValue-a.currentValue).slice(0,15);
+  const mxV = top15[0].currentValue;
+  document.getElementById('bars-chart').innerHTML = top15.map(c =>
+    `<div class="bar-row"><div class="bar-label" title="${c.name}">${c.ticker}</div><div class="bar-outer"><div class="bar-inner" style="width:${(c.currentValue/mxV*100).toFixed(1)}%;background:${COLORS[c.sector]||'var(--accent2)'}"></div></div><div class="bar-val">€${(c.currentValue/1000).toFixed(1)}k</div></div>`
+  ).join('');
+}
+
+function renderDivSummary(){
+  const cs = positions.map(calc).filter(c => c.dividends > 0);
+  const top = [...cs].sort((a,b) => b.dividends-a.dividends).slice(0,12);
+  document.getElementById('div-top').innerHTML = top.map(c =>
+    `<div class="div-row"><span style="color:var(--accent2)">${c.ticker}</span><span style="color:var(--accent)">€${fmt2(c.dividends)}</span></div>`
+  ).join('');
+  const sd = {};
+  cs.forEach(c => { sd[c.sector] = (sd[c.sector]||0)+c.dividends; });
+  document.getElementById('div-sector').innerHTML = Object.entries(sd).sort((a,b)=>b[1]-a[1]).map(([s,v]) =>
+    `<div class="div-row"><span style="color:var(--muted2)">${s}</span><span style="color:var(--accent)">€${fmt2(v)}</span></div>`
+  ).join('');
+}
+
+function renderFilters(){
+  const ss = [...new Set(positions.map(p=>p.sector))].sort();
+  const cc = [...new Set(positions.map(p=>p.country))].sort();
+  const sf = document.getElementById('filter-sector'), cf = document.getElementById('filter-country');
+  const sv = sf.value, cv = cf.value;
+  sf.innerHTML = '<option value="">Todos los sectores</option>'+ss.map(s=>`<option${s===sv?' selected':''}>${s}</option>`).join('');
+  cf.innerHTML = '<option value="">Todos los países</option>'+cc.map(c=>`<option${c===cv?' selected':''}>${c}</option>`).join('');
+}
+
+function renderTable(){
+  const search = document.getElementById('search-box').value.toLowerCase();
+  const fS = document.getElementById('filter-sector').value;
+  const fC = document.getElementById('filter-country').value;
+  const sort = document.getElementById('sort-by').value;
+  const tV = totalVal();
+  let filtered = positions.map(calc).filter(c => {
+    if(search && !c.ticker.toLowerCase().includes(search) && !c.name.toLowerCase().includes(search)) return false;
+    if(fS && c.sector !== fS) return false;
+    if(fC && c.country !== fC) return false;
+    return true;
+  });
+  filtered.sort((a,b) => {
+    switch(sort){
+      case'value-desc': return b.currentValue-a.currentValue;
+      case'value-asc': return a.currentValue-b.currentValue;
+      case'pnl-desc': return b.pnlPct-a.pnlPct;
+      case'pnl-asc': return a.pnlPct-b.pnlPct;
+      case'div-desc': return (b.dividends||0)-(a.dividends||0);
+      case'ticker-asc': return a.ticker.localeCompare(b.ticker);
+      default: return b.currentValue-a.currentValue;
+    }
+  });
+  document.getElementById('table-body').innerHTML = filtered.map(c => {
+    const w = c.currentValue/tV*100;
+    const pc = c.pnl>=0?'pos-val':'neg-val';
+    const sc = COLORS[c.sector]||'#888';
+    return `<tr>
+      <td><span class="ticker-badge">${c.ticker}</span></td>
+      <td style="color:var(--text);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.comment||''}">${c.name}</td>
+      <td><span class="sector-pill" style="background:${sc}22;color:${sc}">${c.sector}</span></td>
+      <td style="color:var(--muted2)">${c.country}</td>
+      <td>${fmt2(c.shares)}</td>
+      <td>${fmt2(c.avgCostEUR)}</td>
+      <td>€${fmt0(c.invested)}</td>
+      <td>${fmt2(c.priceEUR)}</td>
+      <td style="color:var(--text);font-weight:600">€${fmt0(c.currentValue)}</td>
+      <td class="${pc}">${c.pnl>=0?'+':'-'}€${fmt0(Math.abs(c.pnl))}</td>
+      <td class="${pc}">${fmtPct(c.pnlPct)}</td>
+      <td style="color:var(--accent)">${c.dividends>0?'€'+fmt2(c.dividends):'<span style="color:var(--muted)">—</span>'}</td>
+      <td><div class="weight-bar-wrap"><div class="weight-bar" style="width:${Math.max(2,w*4)}px;background:${sc}"></div><span style="color:var(--muted2)">${w.toFixed(1)}%</span></div></td>
+      <td><div class="actions-cell"><button class="btn btn-secondary btn-sm" onclick="openEditModal(${c.id})">✎</button><button class="btn btn-danger btn-sm" onclick="openDeleteModal(${c.id})">✕</button></div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAll(){ renderFilters(); renderSummary(); renderCharts(); renderDivSummary(); renderTable(); }
+
+// ══════════════════════════════════════════════
+// MODALES POSICIONES
+// ══════════════════════════════════════════════
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function openAddModal(){
+  editingId = null;
+  document.getElementById('editModalTitle').textContent = 'Añadir posición';
+  ['f-ticker','f-name','f-avgcost','f-price','f-divs','f-comment'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-sector').value = 'Consumo Defensivo';
+  document.getElementById('f-country').value = 'USA';
+  document.getElementById('f-currency').value = 'USD';
+  document.getElementById('gbp-note').style.display = 'none';
+  openModal('editModal');
+}
+
+function openEditModal(id){
+  const p = positions.find(x => x.id===id); if(!p) return;
+  editingId = id;
+  document.getElementById('editModalTitle').textContent = 'Editar: '+p.ticker;
+  document.getElementById('f-ticker').value = p.ticker;
+  document.getElementById('f-name').value = p.name;
+  document.getElementById('f-sector').value = p.sector;
+  document.getElementById('f-country').value = p.country;
+  document.getElementById('f-currency').value = p.currency;
+  document.getElementById('f-shares').value = p.shares;
+  document.getElementById('f-avgcost').value = p.avgCost;
+  document.getElementById('f-price').value = p.price;
+  document.getElementById('f-divs').value = p.dividends||0;
+  document.getElementById('f-comment').value = p.comment||'';
+  document.getElementById('gbp-note').style.display = p.currency==='GBP'?'block':'none';
+  openModal('editModal');
+}
+
+document.getElementById('f-currency').addEventListener('change', function(){
+  document.getElementById('gbp-note').style.display = this.value==='GBP'?'block':'none';
+});
+
+function savePosition(){
+  const ticker = document.getElementById('f-ticker').value.toUpperCase().trim();
+  const name = document.getElementById('f-name').value.trim();
+  if(!ticker||!name){ alert('Ticker y nombre obligatorios.'); return; }
+  const obj = {
+    ticker, name,
+    sector: document.getElementById('f-sector').value,
+    country: document.getElementById('f-country').value,
+    currency: document.getElementById('f-currency').value,
+    shares: parseFloat(document.getElementById('f-shares').value)||0,
+    avgCost: parseFloat(document.getElementById('f-avgcost').value)||0,
+    price: parseFloat(document.getElementById('f-price').value)||0,
+    dividends: parseFloat(document.getElementById('f-divs').value)||0,
+    comment: document.getElementById('f-comment').value.trim()
+  };
+  if(editingId){
+    const i = positions.findIndex(x => x.id===editingId);
+    if(i>=0) positions[i] = {...positions[i], ...obj};
+  } else {
+    const mx = positions.reduce((m,p) => Math.max(m,p.id||0), 0);
+    positions.push({id:mx+1, ...obj});
+  }
+  saveData(); closeModal('editModal'); renderAll();
+}
+
+function openDeleteModal(id){
+  deletingId = id;
+  const p = positions.find(x => x.id===id);
+  document.getElementById('delete-ticker-name').textContent = p ? p.ticker+' — '+p.name : '';
+  openModal('deleteModal');
+}
+function confirmDelete(){
+  positions = positions.filter(p => p.id!==deletingId);
+  saveData(); closeModal('deleteModal'); renderAll();
+}
+
+// ══════════════════════════════════════════════
+// ACTUALIZAR PRECIOS
+// ══════════════════════════════════════════════
+function openPriceModal(){ document.getElementById('price-input').value=''; openModal('priceModal'); }
+function applyPrices(){
+  const raw = document.getElementById('price-input').value.trim();
+  if(!raw) return;
+  const upd = {};
+  if(raw.startsWith('{')){try{Object.assign(upd,JSON.parse(raw));}catch(e){alert('JSON inválido');return;}}
+  else{ raw.split('\n').forEach(l=>{ const m=l.match(/^([A-Z0-9.\-]+)\s*[:=]\s*([\d.]+)/i); if(m) upd[m[1].toUpperCase().trim()]=parseFloat(m[2]); }); }
+  let n=0;
+  positions.forEach(p => {
+    if(upd[p.ticker]!==undefined){
+      let np = upd[p.ticker];
+      if(p.currency==='GBP' && isPenny(p.ticker) && np>100) np=np/100;
+      p.price = np; n++;
+    }
+  });
+  saveData(); closeModal('priceModal'); renderAll();
+  alert(n>0 ? `✓ ${n} ticker(s) actualizados.` : 'No se encontraron tickers.');
+}
+
+// ══════════════════════════════════════════════
+// EXPORTAR CSV
+// ══════════════════════════════════════════════
+function exportCSV(){
+  const cs = positions.map(calc);
+  const tV = cs.reduce((s,c) => s+c.currentValue, 0);
+  const h = ['Ticker','Nombre','Sector','País','Divisa','Acciones','PrecioMedioLocal','PrecioActualLocal','PrecioMedioEUR','PrecioActualEUR','InvertidoEUR','ValorEUR','PlusvaliaEUR','PlusvaliaPct','DividendosEUR','RentabilidadTotalEUR','RentabilidadTotalPct','PesoPct'];
+  const rows = cs.map(c => [c.ticker,c.name,c.sector,c.country,c.currency,c.shares.toFixed(3),c.avgCost.toFixed(4),c.price.toFixed(4),c.avgCostEUR.toFixed(4),c.priceEUR.toFixed(4),c.invested.toFixed(2),c.currentValue.toFixed(2),c.pnl.toFixed(2),c.pnlPct.toFixed(2),(c.dividends||0).toFixed(2),c.totalReturn.toFixed(2),c.totalReturnPct.toFixed(2),(c.currentValue/tV*100).toFixed(2)]);
+  const csv = [h,...rows].map(r=>r.join(';')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download = 'cartera_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+}
+
+// ══════════════════════════════════════════════
+// ANÁLISIS FUNDAMENTAL — vía Anthropic API + FMP MCP
+// (evita el bloqueo CORS de llamadas directas a FMP)
+// ══════════════════════════════════════════════
+const FUND_CACHE_KEY = 'fund_cache_v9';
+
+// ── Colores por métrica ──
+function colorClass(metric, value){
+  if(value===null||value===undefined||isNaN(value)) return 'cn';
+  const v = parseFloat(value);
+  const rules = {
+    pe:         {g:[0,15],    w:[15,25],  b:[25,9999]},
+    ev_ebitda:  {g:[0,10],    w:[10,15],  b:[15,9999]},
+    roe:        {g:[15,9999], w:[10,15],  b:[-9999,10]},
+    de:         {g:[0,0.5],   w:[0.5,1],  b:[1,9999]},
+    dn_ebitda:  {g:[0,2],     w:[2,3],    b:[3,9999]},
+    rev_growth: {g:[10,9999], w:[5,10],   b:[-9999,5]},
+    fcf_growth: {g:[5,9999],  w:[0,5],    b:[-9999,0]},
+    div_yield:  {g:[2,5],     w:[1,7],    b:[-9999,1]},
+    payout:     {g:[30,60],   w:[20,80],  b:[-9999,20]}
+  };
+  const r = rules[metric]; if(!r) return 'cn';
+  if(v>=r.g[0]&&v<=r.g[1]) return 'cg';
+  if(v>=r.w[0]&&v<=r.w[1]) return 'cw';
+  return 'cb';
+}
+
+function fmtMetric(metric, value){
+  if(value===null||value===undefined) return '—';
+  const v = parseFloat(value);
+  if(isNaN(v)||!isFinite(v)) return '—';
+  const pct = ['roe','rev_growth','fcf_growth','div_yield','payout'];
+  return pct.includes(metric) ? v.toFixed(1)+'%' : v.toFixed(2);
+}
+
+function cell(metric, value){
+  return `<td class="${colorClass(metric,value)}">${fmtMetric(metric,value)}</td>`;
+}
+
+// ── Actualización usando Anthropic API como proxy hacia FMP ──
+async function updateFundamentals(){
+  const anthropicKey = document.getElementById('fmp-key').value.trim();
+  if(!anthropicKey){ alert('Introduce tu API Key de Anthropic.'); return; }
+
+  const tickers = [...new Set(positions.map(p => p.ticker))];
+  const BATCH = 8; // procesamos de 8 en 8 para no saturar
+  const batches = [];
+  for(let i=0;i<tickers.length;i+=BATCH) batches.push(tickers.slice(i,i+BATCH));
+
+  document.getElementById('fund-loading').style.display = 'block';
+  document.getElementById('fund-table-wrap').style.display = 'none';
+  document.getElementById('fund-empty').style.display = 'none';
+  document.getElementById('fund-total').textContent = tickers.length;
+  document.getElementById('fund-progress').textContent = '0';
+
+  const fundData = {};
+  let done = 0;
+
+  for(const batch of batches){
+    const prompt = `Using the FMP (Financial Modeling Prep) tool, get key financial metrics TTM for these stock tickers: ${batch.join(', ')}.
+
+For each ticker return ONLY a valid JSON object like this (no markdown, no explanation, just raw JSON):
+{
+  "TICKER1": {"pe": 18.5, "ev_ebitda": 12.3, "roe": 15.2, "de": 0.45, "dn_ebitda": 1.8, "rev_growth": 8.5, "fcf_growth": 6.2, "div_yield": 3.1, "payout": 42.0},
+  "TICKER2": {...}
+}
+
+Rules:
+- pe = P/E ratio TTM (peRatioTTM)
+- ev_ebitda = EV/EBITDA TTM (enterpriseValueOverEBITDATTM)  
+- roe = Return on Equity TTM as PERCENTAGE (multiply by 100 if decimal)
+- de = Debt to Equity TTM (debtToEquityTTM)
+- dn_ebitda = Net Debt to EBITDA TTM (netDebtToEBITDATTM)
+- rev_growth = Revenue Growth TTM as PERCENTAGE (multiply by 100 if decimal)
+- fcf_growth = Free Cash Flow Growth TTM as PERCENTAGE (multiply by 100 if decimal)
+- div_yield = Dividend Yield Percentage TTM (dividendYieldPercentageTTM) - already in %
+- payout = Payout Ratio TTM as PERCENTAGE (multiply by 100 if decimal, 0-100 range)
+- If a value is not available, use null
+- Some tickers are Spanish (.ES), UK (.GB), German (.DE) - try them as-is first, then without suffix if not found
+- Return ONLY the JSON object, nothing else`;
+
+    try{
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2000,
+          mcp_servers: [{type:'url', url:'https://financialmodelingprep.com/mcp', name:'fmp'}],
+          messages: [{role:'user', content: prompt}]
+        })
+      });
+
+      if(!res.ok){
+        const err = await res.text();
+        console.error('Anthropic API error:', res.status, err);
+        continue;
+      }
+
+      const data = await res.json();
+      // extraer texto de todos los bloques
+      const text = (data.content||[])
+        .filter(b => b.type==='text')
+        .map(b => b.text)
+        .join('');
+
+      // intentar parsear JSON del texto
+      let parsed = null;
+      // buscar el primer { y el último }
+      const start = text.indexOf('{');
+      const end   = text.lastIndexOf('}');
+      if(start !== -1 && end !== -1 && end > start){
+        try{ parsed = JSON.parse(text.slice(start, end+1)); }
+        catch(e){ console.warn('JSON parse error en batch', batch, e, text); }
+      }
+
+      if(parsed){
+        Object.assign(fundData, parsed);
+      }
+    } catch(e){
+      console.error('Error en batch', batch, e);
+    }
+
+    done += batch.length;
+    document.getElementById('fund-progress').textContent = Math.min(done, tickers.length);
+    // pequeña pausa entre batches
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  localStorage.setItem(FUND_CACHE_KEY, JSON.stringify({
+    data: fundData,
+    timestamp: new Date().toISOString(),
+    anthropicKey
+  }));
+
+  document.getElementById('fund-loading').style.display = 'none';
+
+  const found = Object.keys(fundData).length;
+  if(found === 0){
+    document.getElementById('fund-empty').style.display = 'block';
+    document.getElementById('fund-meta').textContent = 'Error: no se obtuvieron datos. Verifica tu API Key de Anthropic.';
+    return;
+  }
+
+  renderFundamentalsTable(fundData);
+}
+
+// ── Carga desde caché ──
+function renderFundamentals(){
+  const cache = JSON.parse(localStorage.getItem(FUND_CACHE_KEY)||'null');
+  if(!cache){
+    document.getElementById('fund-empty').style.display = 'block';
+    document.getElementById('fund-table-wrap').style.display = 'none';
+    document.getElementById('fund-meta').textContent = 'Sin datos. Introduce API Key de Anthropic y haz clic en Actualizar.';
+    return;
+  }
+  if(cache.anthropicKey) document.getElementById('fmp-key').value = cache.anthropicKey;
+  const age = Math.floor((new Date()-new Date(cache.timestamp))/1000/60);
+  const found = Object.keys(cache.data).length;
+  document.getElementById('fund-meta').textContent =
+    `Actualizado hace ${age<60?age+' min':Math.floor(age/60)+' h'} · ${found} tickers con datos`;
+  renderFundamentalsTable(cache.data);
+}
+
+// ── Renderiza la tabla ──
+function renderFundamentalsTable(fundData){
+  document.getElementById('fund-tbody').innerHTML = positions.map(p => {
+    const f = fundData[p.ticker] || {};
+    return `<tr>
+      <td>${p.ticker}</td>
+      <td title="${p.name}">${p.name}</td>
+      ${cell('pe', f.pe)}
+      ${cell('ev_ebitda', f.ev_ebitda)}
+      ${cell('roe', f.roe)}
+      ${cell('de', f.de)}
+      ${cell('dn_ebitda', f.dn_ebitda)}
+      ${cell('rev_growth', f.rev_growth)}
+      ${cell('fcf_growth', f.fcf_growth)}
+      ${cell('div_yield', f.div_yield)}
+      ${cell('payout', f.payout)}
+    </tr>`;
+  }).join('');
+  document.getElementById('fund-table-wrap').style.display = 'block';
+  document.getElementById('fund-empty').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+loadData();
+renderAll();
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if(e.target===el) el.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
