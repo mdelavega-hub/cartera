@@ -291,11 +291,14 @@
 
   <div class="fund-header">
     <div>
-      <p style="font-size:15px;font-weight:700;margin-bottom:3px">Análisis Fundamental — vía Yahoo Finance</p>
-      <p class="fund-meta" id="fund-meta">Sin datos. Haz clic en "Actualizar fundamentales" para cargar datos.</p>
+      <p style="font-size:15px;font-weight:700;margin-bottom:3px">Análisis Fundamental — vía Twelve Data</p>
+      <p class="fund-meta" id="fund-meta">Sin datos. Introduce tu API Key de Twelve Data y haz clic en Actualizar.</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span style="font-size:10px;color:var(--muted);font-family:var(--font-mono)">Sin API Key · datos gratuitos via Yahoo Finance</span>
+      <div>
+        <input id="td-key" type="password" placeholder="API Key de Twelve Data (gratis)" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;width:260px" oninput="syncTDKey(this.value)">
+        <p style="font-size:10px;color:var(--muted);margin-top:3px">Registro gratuito (800 calls/día) en <a href="https://twelvedata.com/register" target="_blank" style="color:var(--accent2)">twelvedata.com</a> · La key se guarda solo en tu navegador</p>
+      </div>
       <button class="btn btn-primary" onclick="updateFundamentals()">🔄 Actualizar fundamentales</button>
     </div>
   </div>
@@ -305,18 +308,18 @@
     <span class="ck"><span class="ck-dot cw" style="background:rgba(251,191,36,.3)"></span>Neutral</span>
     <span class="ck"><span class="ck-dot cb" style="background:rgba(248,113,113,.3)"></span>Cuidado</span>
     <span class="ck"><span style="color:var(--muted);font-size:11px">— = Sin datos</span></span>
-    <span style="font-size:10px;color:var(--muted);margin-left:8px">Datos vía Yahoo Finance (TTM) · Sin API Key · Valoración por reglas automáticas</span>
+    <span style="font-size:10px;color:var(--muted);margin-left:8px">Datos vía Twelve Data (TTM) · 800 calls/día gratis · Valoración por reglas automáticas</span>
   </div>
 
   <div id="fund-loading" class="loading-state" style="display:none">
     <div class="spinner"></div>
-    <p>Consultando Yahoo Finance para <span id="fund-progress">0</span> / <span id="fund-total">0</span> acciones...</p>
-    <p style="font-size:10px;margin-top:6px;color:var(--muted)">Esto puede tardar 30–90 segundos</p>
+    <p>Consultando Twelve Data para <span id="fund-progress">0</span> / <span id="fund-total">0</span> acciones...</p>
+    <p style="font-size:10px;margin-top:6px;color:var(--muted)">Esto puede tardar 30–60 segundos</p>
   </div>
 
   <div id="fund-empty" class="loading-state">
-    <p>Haz clic en "🔄 Actualizar fundamentales" para cargar datos desde Yahoo Finance.</p>
-    <p style="font-size:10px;margin-top:6px;color:var(--muted)">Sin API Key necesaria · datos gratuitos</p>
+    <p>Introduce tu API Key de Twelve Data y haz clic en "🔄 Actualizar fundamentales"</p>
+    <p style="font-size:10px;margin-top:6px">Registro gratuito en <a href="https://twelvedata.com/register" target="_blank" style="color:var(--accent2)">twelvedata.com</a> · 800 llamadas/día · sin tarjeta</p>
   </div>
 
   <div class="fund-table-wrap" style="display:none" id="fund-table-wrap">
@@ -371,6 +374,18 @@ const EUR_TICKER_MAP = {
   'NTGY.ES':'NTGY.MC', 'EBRO.ES':'EBRO.MC', 'VIS.ES':'VIS.MC',
   'LGEN.GB':'LGEN.L',  'BATS.GB':'BATS.L',  'PETS.GB':'PETS.L',
   'ABF.GB':'ABF.L',    'DGE.GB':'DGE.L'
+};
+
+// Twelve Data usa formato SYMBOL:EXCHANGE para acciones no-US
+const TD_TICKER_MAP = {
+  'CABK.ES':'CABK:BME', 'TEF.ES':'TEF:BME',   'LOG.ES':'LOG:BME',
+  'FAE.ES':'FAES:BME',  'ENG.ES':'ENG:BME',   'MAP.ES':'MAP:BME',
+  'SAN.ES':'SAN:BME',   'RED.ES':'RED:BME',   'REP.ES':'REP:BME',
+  'NTGY.ES':'NTGY:BME', 'EBRO.ES':'EBRO:BME', 'VIS.ES':'VIS:BME',
+  'LGEN.GB':'LGEN:LON', 'BATS.GB':'BATS:LON', 'PETS.GB':'PETS:LON',
+  'ABF.GB':'ABF:LON',   'DGE.GB':'DGE:LON',
+  'JEQP.DE':'JEQP:XETRA','JGPI.DE':'JGPI:XETRA',
+  'TRET.DE':'TRET:XETRA','XDEQ.DE':'XDEQ:XETRA'
 };
 
 // ══════════════════════════════════════════════
@@ -450,35 +465,47 @@ async function updatePricesFromAPI(){
 }
 
 // ══════════════════════════════════════════════
-// YAHOO FINANCE — FUNDAMENTALES (sin API Key)
+// TWELVE DATA — FUNDAMENTALES (key en localStorage)
+// Registro gratis: twelvedata.com · 800 calls/día
+// CORS nativo: no requiere proxy
 // ══════════════════════════════════════════════
-async function fetchYahooFundamentals(ticker) {
-  const modules = 'financialData,defaultKeyStatistics,summaryDetail';
-  const url = `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${ticker}?modules=${modules}`;
+const TD_KEY_STORE = 'twelvedata_key_v9';
+
+function getTDKey(){
+  return (document.getElementById('td-key')||{value:''}).value.trim()
+      || localStorage.getItem(TD_KEY_STORE) || '';
+}
+function syncTDKey(val){
+  if(!val) return;
+  localStorage.setItem(TD_KEY_STORE, val);
+  const el = document.getElementById('td-key');
+  if(el && el.value !== val) el.value = val;
+}
+
+async function fetchTwelveDataFundamentals(tdTicker, key) {
+  const url = `https://api.twelvedata.com/statistics?symbol=${encodeURIComponent(tdTicker)}&apikey=${key}`;
   try {
-    const res = await fetch(CORS_PROXY + encodeURIComponent(url));
+    const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    const result = data?.quoteSummary?.result?.[0];
-    if (!result) return null;
-    const fd = result.financialData || {};
-    const ks = result.defaultKeyStatistics || {};
-    const sd = result.summaryDetail || {};
-    const raw = v => (v && typeof v === 'object' && v.raw !== undefined) ? v.raw : (typeof v === 'number' ? v : null);
-    const safe = (v, mult = 1) => {
-      const n = parseFloat(raw(v));
+    if (data.status === 'error' || !data.statistics) return null;
+    const v = data.statistics.valuations_metrics  || {};
+    const f = data.statistics.financials           || {};
+    const d = data.statistics.dividends_and_splits || {};
+    const safe = (val, mult = 1) => {
+      const n = parseFloat(val);
       return (!isNaN(n) && isFinite(n)) ? +(n * mult).toFixed(4) : null;
     };
     return {
-      pe:         safe(ks.trailingPE),
-      ev_ebitda:  safe(ks.enterpriseToEbitda),
-      roe:        safe(fd.returnOnEquity, 100),
-      de:         safe(fd.debtToEquity, 0.01),
+      pe:         safe(v.trailing_pe),
+      ev_ebitda:  safe(v.enterprise_to_ebitda),
+      roe:        safe(f.return_on_equity_ttm,          100), // decimal → %
+      de:         safe(f.total_debt_to_equity_mrq),            // ya en ratio
       dn_ebitda:  null,
-      rev_growth: safe(fd.revenueGrowth, 100),
+      rev_growth: safe(f.quarterly_revenue_growth_yoy,  100), // decimal → %
       fcf_growth: null,
-      div_yield:  safe(sd.dividendYield, 100),
-      payout:     safe(sd.payoutRatio, 100)
+      div_yield:  safe(d.trailing_annual_dividend_yield, 100), // decimal → %
+      payout:     safe(d.payout_ratio,                  100)  // decimal → %
     };
   } catch(e) { return null; }
 }
@@ -884,8 +911,15 @@ function calcValuation(f){
   return                 {label:'Cuidado', cls:'cb'};
 }
 
-// ── Actualización usando Yahoo Finance (sin API Key) ──
+// ── Actualización usando Twelve Data ──
 async function updateFundamentals(){
+  const key = getTDKey();
+  if(!key){
+    alert('Introduce tu API Key de Twelve Data.\nRegistro gratuito en: twelvedata.com/register\n(800 llamadas/día, sin tarjeta)');
+    return;
+  }
+  syncTDKey(key);
+
   const tickers = [...new Set(positions.map(p => p.ticker))];
 
   document.getElementById('fund-loading').style.display    = 'block';
@@ -898,13 +932,14 @@ async function updateFundamentals(){
 
   for(let i = 0; i < tickers.length; i++){
     const ticker = tickers[i];
-    const yahooT = EUR_TICKER_MAP[ticker] || ticker;
+    const tdT    = TD_TICKER_MAP[ticker] || ticker;
     document.getElementById('fund-progress').textContent = i + 1;
 
-    const f = await fetchYahooFundamentals(yahooT);
+    const f = await fetchTwelveDataFundamentals(tdT, key);
     fundData[ticker] = f || {pe:null,ev_ebitda:null,roe:null,de:null,dn_ebitda:null,rev_growth:null,fcf_growth:null,div_yield:null,payout:null};
 
-    if(i < tickers.length - 1) await new Promise(r => setTimeout(r, 400));
+    // ~8 req/min en plan free → pausa de 500ms entre tickers
+    if(i < tickers.length - 1) await new Promise(r => setTimeout(r, 500));
   }
 
   localStorage.setItem(FUND_CACHE_KEY, JSON.stringify({data: fundData, timestamp: new Date().toISOString()}));
@@ -913,7 +948,7 @@ async function updateFundamentals(){
   const found = Object.values(fundData).filter(f => Object.values(f).some(v => v !== null)).length;
   if(found === 0){
     document.getElementById('fund-empty').style.display = 'block';
-    document.getElementById('fund-meta').textContent    = 'Sin datos. Yahoo Finance no devolvió resultados.';
+    document.getElementById('fund-meta').textContent    = 'Sin datos. Verifica que tu API Key de Twelve Data es correcta.';
     return;
   }
   renderFundamentalsTable(fundData);
@@ -925,13 +960,13 @@ function renderFundamentals(){
   if(!cache || !cache.data){
     document.getElementById('fund-empty').style.display      = 'block';
     document.getElementById('fund-table-wrap').style.display = 'none';
-    document.getElementById('fund-meta').textContent         = 'Sin datos. Introduce tu API Key de FMP y haz clic en Actualizar.';
+    document.getElementById('fund-meta').textContent         = 'Sin datos. Introduce tu API Key de Twelve Data y haz clic en Actualizar.';
     return;
   }
   const age   = Math.floor((new Date() - new Date(cache.timestamp)) / 1000 / 60);
   const found = Object.values(cache.data).filter(f => Object.values(f).some(v => v !== null)).length;
   document.getElementById('fund-meta').textContent =
-    `Actualizado hace ${age < 60 ? age + ' min' : Math.floor(age/60) + ' h'} · ${found} tickers con datos · Yahoo Finance`;
+    `Actualizado hace ${age < 60 ? age + ' min' : Math.floor(age/60) + ' h'} · ${found} tickers con datos · Twelve Data`;
   renderFundamentalsTable(cache.data);
 }
 
@@ -968,13 +1003,12 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if(e.target===el) el.classList.remove('open'); });
 });
 
-// Cargar fundamentales desde caché si existen
+// Precargar Twelve Data key guardada
 (function(){
-  const cache = JSON.parse(localStorage.getItem(FUND_CACHE_KEY) || 'null');
-  if(cache && cache.data){
-    const age = Math.floor((new Date() - new Date(cache.timestamp)) / 1000 / 60);
-    const s = document.getElementById('price-status');
-    if(s && age < 60) s.textContent = 'Precios via Yahoo Finance · sin API Key';
+  const tk = localStorage.getItem(TD_KEY_STORE);
+  if(tk){
+    const el = document.getElementById('td-key');
+    if(el) el.value = tk;
   }
 })();
 </script>
