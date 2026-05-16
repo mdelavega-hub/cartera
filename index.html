@@ -213,7 +213,12 @@
     <p id="header-sub">v9 · Cargando...</p>
   </div>
   <div class="header-actions">
-    <button class="btn btn-secondary" onclick="openPriceModal()">✎ Precios</button>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <input id="fmp-api-key" type="password" placeholder="API Key FMP (gratis)" title="Financial Modeling Prep API Key — se guarda en tu navegador" style="padding:5px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;width:190px" oninput="syncFMPKey(this.value)">
+      <span id="price-status" style="font-size:10px;color:var(--muted);font-family:var(--font-mono)">financialmodelingprep.com/register-free</span>
+    </div>
+    <button id="btn-update-prices" class="btn btn-primary" onclick="updatePricesFromAPI()">⟳ Actualizar precios</button>
+    <button class="btn btn-secondary" onclick="openPriceModal()">✎ Manual</button>
     <button class="btn btn-secondary" onclick="exportCSV()">⬇ CSV</button>
     <button class="btn btn-primary" onclick="openAddModal()">+ Posición</button>
   </div>
@@ -289,13 +294,13 @@
 
   <div class="fund-header">
     <div>
-      <p style="font-size:15px;font-weight:700;margin-bottom:3px">Análisis Fundamental — vía Anthropic + FMP</p>
-      <p class="fund-meta" id="fund-meta">Sin datos. Introduce tu API Key de Anthropic y haz clic en Actualizar.</p>
+      <p style="font-size:15px;font-weight:700;margin-bottom:3px">Análisis Fundamental — vía Financial Modeling Prep</p>
+      <p class="fund-meta" id="fund-meta">Sin datos. Introduce tu API Key de FMP y haz clic en Actualizar.</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div>
-        <input id="fmp-key" type="password" placeholder="sk-ant-... (API Key de Anthropic)" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;width:280px">
-        <p style="font-size:10px;color:var(--muted);margin-top:3px">Obtén tu key en <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent2)">console.anthropic.com</a> → API Keys</p>
+        <input id="fmp-key" type="password" placeholder="API Key de Financial Modeling Prep" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;width:280px" oninput="syncFMPKey(this.value)">
+        <p style="font-size:10px;color:var(--muted);margin-top:3px">Registro gratuito (250 calls/día) en <a href="https://financialmodelingprep.com/register-free" target="_blank" style="color:var(--accent2)">financialmodelingprep.com</a> · La key se guarda solo en tu navegador</p>
       </div>
       <button class="btn btn-primary" onclick="updateFundamentals()">🔄 Actualizar fundamentales</button>
     </div>
@@ -306,7 +311,7 @@
     <span class="ck"><span class="ck-dot cw" style="background:rgba(251,191,36,.3)"></span>Neutral</span>
     <span class="ck"><span class="ck-dot cb" style="background:rgba(248,113,113,.3)"></span>Cuidado</span>
     <span class="ck"><span style="color:var(--muted);font-size:11px">— = Sin datos</span></span>
-    <span style="font-size:10px;color:var(--muted);margin-left:8px">Datos de mercado vía Financial Modeling Prep · Procesados por Claude</span>
+    <span style="font-size:10px;color:var(--muted);margin-left:8px">Datos vía Financial Modeling Prep (ratios TTM) · Valoración por reglas automáticas</span>
   </div>
 
   <div id="fund-loading" class="loading-state" style="display:none">
@@ -335,6 +340,7 @@
           <th title="Free Cash Flow Growth %">FCF Gr%</th>
           <th title="Dividend Yield %">Div Yld%</th>
           <th title="Payout Ratio %">Payout%</th>
+          <th title="Valoración por reglas simples (P/E, ROE, D/E, Yield, Crecimiento)">Valoración</th>
         </tr>
       </thead>
       <tbody id="fund-tbody"></tbody>
@@ -357,6 +363,117 @@ const COLORS = {
   'Industrial':'#94a3b8','Utilities':'#34d399','Inmobiliario':'#f472b6',
   'Telecomunicaciones':'#facc15','Materiales':'#a3e635','ETF Global':'#e879f9','Bonos':'#71717a'
 };
+
+// ══════════════════════════════════════════════
+// FMP API — CLAVE Y MAPA DE TICKERS
+// ══════════════════════════════════════════════
+const FMP_KEY_STORE = 'fmp_key_v9';
+
+// Convierte los tickers internos al formato que usa Financial Modeling Prep:
+// España: .ES → .MC (Bolsa de Madrid)
+// UK:     .GB → .L  (London Stock Exchange, precios en GBX/peniques)
+// USA, Canadá, Alemania: se usan tal cual
+const FMP_TICKER_MAP = {
+  'CABK.ES':'CABK.MC', 'TEF.ES':'TEF.MC',   'LOG.ES':'LOG.MC',
+  'FAE.ES':'FAES.MC',  'ENG.ES':'ENG.MC',   'MAP.ES':'MAP.MC',
+  'SAN.ES':'SAN.MC',   'RED.ES':'RED.MC',   'REP.ES':'REP.MC',
+  'NTGY.ES':'NTGY.MC', 'EBRO.ES':'EBRO.MC', 'VIS.ES':'VIS.MC',
+  'LGEN.GB':'LGEN.L',  'BATS.GB':'BATS.L',  'PETS.GB':'PETS.L',
+  'ABF.GB':'ABF.L',    'DGE.GB':'DGE.L'
+};
+
+function getFMPTicker(ticker){ return FMP_TICKER_MAP[ticker] || ticker; }
+
+// Lee la FMP key del input visible o del localStorage
+function getFMPKey(){
+  const h = (document.getElementById('fmp-api-key')||{}).value||'';
+  const f = (document.getElementById('fmp-key')||{}).value||'';
+  return h.trim() || f.trim() || localStorage.getItem(FMP_KEY_STORE) || '';
+}
+
+// Sincroniza ambos inputs (header + pestaña fundamentales) y persiste en localStorage
+function syncFMPKey(val){
+  if(!val) return;
+  localStorage.setItem(FMP_KEY_STORE, val);
+  const h = document.getElementById('fmp-api-key');
+  const f = document.getElementById('fmp-key');
+  if(h && h.value !== val) h.value = val;
+  if(f && f.value !== val) f.value = val;
+}
+
+// ══════════════════════════════════════════════
+// ACTUALIZAR PRECIOS DESDE FMP API
+// ══════════════════════════════════════════════
+async function updatePricesFromAPI(){
+  const key = getFMPKey();
+  if(!key){
+    alert('Necesitas una API Key gratuita de Financial Modeling Prep.\n\nIntrodúcela en el campo del header o en la pestaña "Análisis fundamental".\nRegistro gratuito en: financialmodelingprep.com/register-free\n\nTambién puedes usar "✎ Manual" para actualizar precios a mano.');
+    return;
+  }
+  syncFMPKey(key);
+
+  const btn    = document.getElementById('btn-update-prices');
+  const status = document.getElementById('price-status');
+  btn.disabled = true;
+  status.style.color = 'var(--accent2)';
+  status.textContent = 'Consultando precios...';
+
+  // Construir lista única de tickers en formato FMP
+  const fmpTickers = [...new Set(positions.map(p => getFMPTicker(p.ticker)))];
+  const results = {}; // fmpTicker → price
+
+  // FMP acepta hasta ~50 tickers separados por coma en un solo request
+  const BATCH = 50;
+  for(let i = 0; i < fmpTickers.length; i += BATCH){
+    const batch = fmpTickers.slice(i, i + BATCH).join(',');
+    status.textContent = `Consultando ${Math.min(i + BATCH, fmpTickers.length)}/${fmpTickers.length} tickers...`;
+    try{
+      const res = await fetch(`https://financialmodelingprep.com/api/v3/quote/${batch}?apikey=${key}`);
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if(data && data['Error Message']) throw new Error(data['Error Message']);
+      if(Array.isArray(data)){
+        data.forEach(q => { if(q.symbol && q.price != null) results[q.symbol] = q.price; });
+      }
+    }catch(e){
+      console.error('Error FMP quote:', e);
+      btn.disabled = false;
+      status.style.color = 'var(--red)';
+      status.textContent = '⚠ Error: ' + e.message;
+      return;
+    }
+  }
+
+  // Aplicar precios a las posiciones
+  let updated = 0;
+  const errors = [];
+  positions.forEach(p => {
+    const ft = getFMPTicker(p.ticker);
+    if(results[ft] != null){
+      let price = parseFloat(results[ft]);
+      // FMP devuelve acciones UK en GBX (peniques) → convertir a GBP si price > 100
+      if(p.currency === 'GBP' && price > 100) price = price / 100;
+      p.price = +price.toFixed(4);
+      updated++;
+    } else {
+      errors.push(p.ticker);
+    }
+  });
+
+  saveData();
+  renderAll();
+  btn.disabled = false;
+
+  const ts = new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});
+  if(errors.length){
+    status.style.color = 'var(--yellow)';
+    status.textContent = `✓ ${updated} actualizados ${ts} · sin datos: ${errors.join(', ')}`;
+    console.warn('Tickers sin precio en FMP:', errors);
+  } else {
+    status.style.color = 'var(--accent)';
+    status.textContent = `✓ ${updated} precios actualizados a las ${ts}`;
+  }
+}
 
 const DEFAULTS = [
   {ticker:'CABK.ES',name:'CaixaBank',sector:'Financiero',country:'España',currency:'EUR',shares:1400,avgCost:5.22,price:10.50,dividends:1393.00,comment:'Mayor posición española. Vigilar morosidad.'},
@@ -730,15 +847,48 @@ function cell(metric, value){
   return `<td class="${colorClass(metric,value)}">${fmtMetric(metric,value)}</td>`;
 }
 
-// ── Actualización usando Anthropic API como proxy hacia FMP ──
+// ── Valoración simple por reglas (sin IA) ──
+function calcValuation(f){
+  if(!f) return {label:'Sin datos', cls:'cn'};
+  let score = 0, count = 0;
+
+  const add = (v, isGood, isNeutral) => {
+    if(v === null || v === undefined || isNaN(v)) return;
+    count++;
+    if(isGood(v))    score += 2;
+    else if(isNeutral(v)) score += 1;
+    else score -= 1;
+  };
+
+  // P/E: bueno <15, neutral 15-25, malo >25 o negativo
+  add(f.pe,       v => v > 0 && v < 15,  v => v >= 15 && v < 25);
+  // ROE %: bueno >15, neutral 10-15, malo <10
+  add(f.roe,      v => v > 15,            v => v >= 10 && v <= 15);
+  // Deuda/Equity: bueno <0.5, neutral 0.5-1.5, malo >1.5
+  add(f.de,       v => v >= 0 && v < 0.5, v => v >= 0.5 && v < 1.5);
+  // Dividend Yield %: bueno 2-5.5%, neutral 0-8%, malo fuera (yield trap o sin dividendo)
+  add(f.div_yield, v => v >= 2 && v <= 5.5, v => v > 0 && v < 8);
+  // Payout %: bueno 25-65%, neutral 10-80%, malo fuera de rango (0 = no paga → ignorar)
+  if(f.payout && f.payout > 0) add(f.payout, v => v >= 25 && v <= 65, v => v >= 10 && v < 80);
+  // Revenue growth %: bueno >=8, neutral 0-8, malo <0
+  add(f.rev_growth, v => v >= 8, v => v >= 0 && v < 8);
+  // EV/EBITDA: bueno <10, neutral 10-15, malo >15
+  add(f.ev_ebitda,  v => v > 0 && v < 10, v => v >= 10 && v <= 15);
+
+  if(count === 0) return {label:'Sin datos', cls:'cn'};
+  const avg = score / count;
+  if(avg >= 1.2)  return {label:'Bueno',   cls:'cg'};
+  if(avg >= 0.2)  return {label:'Neutral',  cls:'cw'};
+  return          {label:'Cuidado',  cls:'cb'};
+}
+
+// ── Actualización usando FMP directamente (sin Anthropic) ──
 async function updateFundamentals(){
-  const anthropicKey = document.getElementById('fmp-key').value.trim();
-  if(!anthropicKey){ alert('Introduce tu API Key de Anthropic.'); return; }
+  const key = getFMPKey();
+  if(!key){ alert('Introduce tu API Key de Financial Modeling Prep.\nRegistro gratuito en: financialmodelingprep.com/register-free'); return; }
+  syncFMPKey(key);
 
   const tickers = [...new Set(positions.map(p => p.ticker))];
-  const BATCH = 8; // procesamos de 8 en 8 para no saturar
-  const batches = [];
-  for(let i=0;i<tickers.length;i+=BATCH) batches.push(tickers.slice(i,i+BATCH));
 
   document.getElementById('fund-loading').style.display = 'block';
   document.getElementById('fund-table-wrap').style.display = 'none';
@@ -747,95 +897,69 @@ async function updateFundamentals(){
   document.getElementById('fund-progress').textContent = '0';
 
   const fundData = {};
-  let done = 0;
 
-  for(const batch of batches){
-    const prompt = `Using the FMP (Financial Modeling Prep) tool, get key financial metrics TTM for these stock tickers: ${batch.join(', ')}.
-
-For each ticker return ONLY a valid JSON object like this (no markdown, no explanation, just raw JSON):
-{
-  "TICKER1": {"pe": 18.5, "ev_ebitda": 12.3, "roe": 15.2, "de": 0.45, "dn_ebitda": 1.8, "rev_growth": 8.5, "fcf_growth": 6.2, "div_yield": 3.1, "payout": 42.0},
-  "TICKER2": {...}
-}
-
-Rules:
-- pe = P/E ratio TTM (peRatioTTM)
-- ev_ebitda = EV/EBITDA TTM (enterpriseValueOverEBITDATTM)  
-- roe = Return on Equity TTM as PERCENTAGE (multiply by 100 if decimal)
-- de = Debt to Equity TTM (debtToEquityTTM)
-- dn_ebitda = Net Debt to EBITDA TTM (netDebtToEBITDATTM)
-- rev_growth = Revenue Growth TTM as PERCENTAGE (multiply by 100 if decimal)
-- fcf_growth = Free Cash Flow Growth TTM as PERCENTAGE (multiply by 100 if decimal)
-- div_yield = Dividend Yield Percentage TTM (dividendYieldPercentageTTM) - already in %
-- payout = Payout Ratio TTM as PERCENTAGE (multiply by 100 if decimal, 0-100 range)
-- If a value is not available, use null
-- Some tickers are Spanish (.ES), UK (.GB), German (.DE) - try them as-is first, then without suffix if not found
-- Return ONLY the JSON object, nothing else`;
+  for(let i = 0; i < tickers.length; i++){
+    const ticker  = tickers[i];
+    const fmpT    = getFMPTicker(ticker);
+    document.getElementById('fund-progress').textContent = i + 1;
 
     try{
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 2000,
-          mcp_servers: [{type:'url', url:'https://financialmodelingprep.com/mcp', name:'fmp'}],
-          messages: [{role:'user', content: prompt}]
-        })
-      });
+      // 3 llamadas en paralelo por ticker para minimizar tiempo total
+      const [ratiosRes, metricsRes, growthRes] = await Promise.all([
+        fetch(`https://financialmodelingprep.com/api/v3/ratios-ttm/${fmpT}?apikey=${key}`),
+        fetch(`https://financialmodelingprep.com/api/v3/key-metrics-ttm/${fmpT}?apikey=${key}`),
+        fetch(`https://financialmodelingprep.com/api/v3/financial-growth/${fmpT}?limit=1&apikey=${key}`)
+      ]);
 
-      if(!res.ok){
-        const err = await res.text();
-        console.error('Anthropic API error:', res.status, err);
-        continue;
-      }
+      const [ratios, metrics, growth] = await Promise.all([
+        ratiosRes.ok  ? ratiosRes.json()  : null,
+        metricsRes.ok ? metricsRes.json() : null,
+        growthRes.ok  ? growthRes.json()  : null
+      ]);
 
-      const data = await res.json();
-      // extraer texto de todos los bloques
-      const text = (data.content||[])
-        .filter(b => b.type==='text')
-        .map(b => b.text)
-        .join('');
+      // Los endpoints devuelven array con un objeto, o a veces el objeto directamente
+      const r = (Array.isArray(ratios)  && ratios[0])  ? ratios[0]  : (ratios  && !Array.isArray(ratios)  ? ratios  : {});
+      const m = (Array.isArray(metrics) && metrics[0]) ? metrics[0] : (metrics && !Array.isArray(metrics) ? metrics : {});
+      const g = (Array.isArray(growth)  && growth[0])  ? growth[0]  : {};
 
-      // intentar parsear JSON del texto
-      let parsed = null;
-      // buscar el primer { y el último }
-      const start = text.indexOf('{');
-      const end   = text.lastIndexOf('}');
-      if(start !== -1 && end !== -1 && end > start){
-        try{ parsed = JSON.parse(text.slice(start, end+1)); }
-        catch(e){ console.warn('JSON parse error en batch', batch, e, text); }
-      }
+      // Convierte a número, aplicando multiplicador si el valor viene en formato decimal (0-1)
+      const safe = (v, mult = 1) => {
+        const n = parseFloat(v);
+        return (!isNaN(n) && isFinite(n)) ? +(n * mult).toFixed(4) : null;
+      };
 
-      if(parsed){
-        Object.assign(fundData, parsed);
-      }
-    } catch(e){
-      console.error('Error en batch', batch, e);
+      fundData[ticker] = {
+        pe:         safe(r.peRatioTTM),
+        ev_ebitda:  safe(m.enterpriseValueOverEBITDATTM),
+        roe:        safe(r.returnOnEquityTTM,         100), // FMP lo da en decimal (0.15 = 15%)
+        de:         safe(r.debtEquityRatioTTM),
+        dn_ebitda:  safe(m.netDebtToEBITDATTM),
+        rev_growth: safe(g.revenueGrowth,              100), // FMP lo da en decimal
+        fcf_growth: safe(g.freeCashFlowGrowth,         100), // FMP lo da en decimal
+        div_yield:  safe(r.dividendYieldPercentageTTM),      // FMP ya lo da en %
+        payout:     safe(r.payoutRatioTTM,             100)  // FMP lo da en decimal (0.45 = 45%)
+      };
+
+    }catch(e){
+      console.warn(`Error obteniendo datos FMP para ${ticker}:`, e);
+      fundData[ticker] = {pe:null,ev_ebitda:null,roe:null,de:null,dn_ebitda:null,rev_growth:null,fcf_growth:null,div_yield:null,payout:null};
     }
 
-    done += batch.length;
-    document.getElementById('fund-progress').textContent = Math.min(done, tickers.length);
-    // pequeña pausa entre batches
-    await new Promise(r => setTimeout(r, 500));
+    // Pausa entre tickers para no saturar el límite de la API gratuita
+    if(i < tickers.length - 1) await new Promise(r => setTimeout(r, 200));
   }
 
   localStorage.setItem(FUND_CACHE_KEY, JSON.stringify({
     data: fundData,
-    timestamp: new Date().toISOString(),
-    anthropicKey
+    timestamp: new Date().toISOString()
   }));
 
   document.getElementById('fund-loading').style.display = 'none';
 
-  const found = Object.keys(fundData).length;
+  const found = Object.values(fundData).filter(f => Object.values(f).some(v => v !== null)).length;
   if(found === 0){
     document.getElementById('fund-empty').style.display = 'block';
-    document.getElementById('fund-meta').textContent = 'Error: no se obtuvieron datos. Verifica tu API Key de Anthropic.';
+    document.getElementById('fund-meta').textContent = 'Sin datos. Verifica que tu API Key de FMP es correcta.';
     return;
   }
 
@@ -844,25 +968,25 @@ Rules:
 
 // ── Carga desde caché ──
 function renderFundamentals(){
-  const cache = JSON.parse(localStorage.getItem(FUND_CACHE_KEY)||'null');
-  if(!cache){
+  const cache = JSON.parse(localStorage.getItem(FUND_CACHE_KEY) || 'null');
+  if(!cache || !cache.data){
     document.getElementById('fund-empty').style.display = 'block';
     document.getElementById('fund-table-wrap').style.display = 'none';
-    document.getElementById('fund-meta').textContent = 'Sin datos. Introduce API Key de Anthropic y haz clic en Actualizar.';
+    document.getElementById('fund-meta').textContent = 'Sin datos. Introduce tu API Key de FMP y haz clic en Actualizar.';
     return;
   }
-  if(cache.anthropicKey) document.getElementById('fmp-key').value = cache.anthropicKey;
-  const age = Math.floor((new Date()-new Date(cache.timestamp))/1000/60);
-  const found = Object.keys(cache.data).length;
+  const age   = Math.floor((new Date() - new Date(cache.timestamp)) / 1000 / 60);
+  const found = Object.values(cache.data).filter(f => Object.values(f).some(v => v !== null)).length;
   document.getElementById('fund-meta').textContent =
-    `Actualizado hace ${age<60?age+' min':Math.floor(age/60)+' h'} · ${found} tickers con datos`;
+    `Actualizado hace ${age < 60 ? age + ' min' : Math.floor(age / 60) + ' h'} · ${found} tickers con datos · Financial Modeling Prep`;
   renderFundamentalsTable(cache.data);
 }
 
-// ── Renderiza la tabla ──
+// ── Renderiza la tabla con columna de Valoración ──
 function renderFundamentalsTable(fundData){
   document.getElementById('fund-tbody').innerHTML = positions.map(p => {
-    const f = fundData[p.ticker] || {};
+    const f   = fundData[p.ticker] || {};
+    const val = calcValuation(f);
     return `<tr>
       <td>${p.ticker}</td>
       <td title="${p.name}">${p.name}</td>
@@ -875,6 +999,7 @@ function renderFundamentalsTable(fundData){
       ${cell('fcf_growth', f.fcf_growth)}
       ${cell('div_yield', f.div_yield)}
       ${cell('payout', f.payout)}
+      <td class="${val.cls}" style="font-weight:600;white-space:nowrap;text-align:center">${val.label}</td>
     </tr>`;
   }).join('');
   document.getElementById('fund-table-wrap').style.display = 'block';
@@ -889,6 +1014,19 @@ renderAll();
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if(e.target===el) el.classList.remove('open'); });
 });
+
+// Precargar FMP key desde localStorage si existe
+(function(){
+  const saved = localStorage.getItem(FMP_KEY_STORE);
+  if(saved){
+    const h = document.getElementById('fmp-api-key');
+    const f = document.getElementById('fmp-key');
+    if(h) h.value = saved;
+    if(f) f.value = saved;
+    const s = document.getElementById('price-status');
+    if(s){ s.style.color = 'var(--accent)'; s.textContent = 'API Key cargada ✓'; }
+  }
+})();
 </script>
 </body>
 </html>
