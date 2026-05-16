@@ -213,10 +213,7 @@
     <p id="header-sub">v9 · Cargando...</p>
   </div>
   <div class="header-actions">
-    <div style="display:flex;flex-direction:column;gap:3px">
-      <input id="finnhub-key" type="password" placeholder="API Key Finnhub (precios)" title="Finnhub API Key para precios — gratis en finnhub.io — se guarda solo en tu navegador" style="padding:5px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;width:195px" oninput="syncFinnhubKey(this.value)">
-      <span id="price-status" style="font-size:10px;color:var(--muted);font-family:var(--font-mono)">finnhub.io · gratis · sin tarjeta</span>
-    </div>
+    <span id="price-status" style="font-size:10px;color:var(--muted);font-family:var(--font-mono);align-self:center">Precios via Yahoo Finance · sin API Key</span>
     <button id="btn-update-prices" class="btn btn-primary" onclick="updatePricesFromAPI()">⟳ Actualizar precios</button>
     <button class="btn btn-secondary" onclick="openPriceModal()">✎ Manual</button>
     <button class="btn btn-secondary" onclick="exportCSV()">⬇ CSV</button>
@@ -294,14 +291,11 @@
 
   <div class="fund-header">
     <div>
-      <p style="font-size:15px;font-weight:700;margin-bottom:3px">Análisis Fundamental — vía Financial Modeling Prep</p>
-      <p class="fund-meta" id="fund-meta">Sin datos. Introduce tu API Key de FMP y haz clic en Actualizar.</p>
+      <p style="font-size:15px;font-weight:700;margin-bottom:3px">Análisis Fundamental — vía Yahoo Finance</p>
+      <p class="fund-meta" id="fund-meta">Sin datos. Haz clic en "Actualizar fundamentales" para cargar datos.</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div>
-        <input id="fmp-key" type="password" placeholder="API Key de Financial Modeling Prep" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;width:280px" oninput="syncFMPKey(this.value)">
-        <p style="font-size:10px;color:var(--muted);margin-top:3px">Registro gratuito (250 calls/día) en <a href="https://financialmodelingprep.com/register-free" target="_blank" style="color:var(--accent2)">financialmodelingprep.com</a> · La key se guarda solo en tu navegador</p>
-      </div>
+      <span style="font-size:10px;color:var(--muted);font-family:var(--font-mono)">Sin API Key · datos gratuitos via Yahoo Finance</span>
       <button class="btn btn-primary" onclick="updateFundamentals()">🔄 Actualizar fundamentales</button>
     </div>
   </div>
@@ -311,18 +305,18 @@
     <span class="ck"><span class="ck-dot cw" style="background:rgba(251,191,36,.3)"></span>Neutral</span>
     <span class="ck"><span class="ck-dot cb" style="background:rgba(248,113,113,.3)"></span>Cuidado</span>
     <span class="ck"><span style="color:var(--muted);font-size:11px">— = Sin datos</span></span>
-    <span style="font-size:10px;color:var(--muted);margin-left:8px">Datos vía Financial Modeling Prep (ratios TTM) · Valoración por reglas automáticas</span>
+    <span style="font-size:10px;color:var(--muted);margin-left:8px">Datos vía Yahoo Finance (TTM) · Sin API Key · Valoración por reglas automáticas</span>
   </div>
 
   <div id="fund-loading" class="loading-state" style="display:none">
     <div class="spinner"></div>
-    <p>Consultando FMP para <span id="fund-progress">0</span> / <span id="fund-total">0</span> acciones...</p>
+    <p>Consultando Yahoo Finance para <span id="fund-progress">0</span> / <span id="fund-total">0</span> acciones...</p>
     <p style="font-size:10px;margin-top:6px;color:var(--muted)">Esto puede tardar 30–90 segundos</p>
   </div>
 
   <div id="fund-empty" class="loading-state">
-    <p>Introduce tu API Key de FMP y haz clic en "🔄 Actualizar fundamentales"</p>
-    <p style="font-size:10px;margin-top:6px">Registro gratuito en <a href="https://financialmodelingprep.com" target="_blank" style="color:var(--accent2)">financialmodelingprep.com</a></p>
+    <p>Haz clic en "🔄 Actualizar fundamentales" para cargar datos desde Yahoo Finance.</p>
+    <p style="font-size:10px;margin-top:6px;color:var(--muted)">Sin API Key necesaria · datos gratuitos</p>
   </div>
 
   <div class="fund-table-wrap" style="display:none" id="fund-table-wrap">
@@ -380,63 +374,50 @@ const EUR_TICKER_MAP = {
 };
 
 // ══════════════════════════════════════════════
-// FINNHUB — PRECIOS (gratuito, CORS habilitado)
-// Registro: finnhub.io · 60 req/min en plan free
+// YAHOO FINANCE — PRECIOS (sin API Key, via CORS proxy)
+// corsproxy.io actúa de intermediario para evitar CORS
 // ══════════════════════════════════════════════
-const FINNHUB_KEY_STORE = 'finnhub_key_v9';
+const CORS_PROXY = 'https://corsproxy.io/?url=';
 
-function getFinnhubKey(){
-  return (document.getElementById('finnhub-key')||{value:''}).value.trim()
-      || localStorage.getItem(FINNHUB_KEY_STORE) || '';
-}
-function syncFinnhubKey(val){
-  if(!val) return;
-  localStorage.setItem(FINNHUB_KEY_STORE, val);
-  const h = document.getElementById('finnhub-key');
-  if(h && h.value !== val) h.value = val;
+async function fetchYahooPrice(ticker) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+  try {
+    const res = await fetch(CORS_PROXY + encodeURIComponent(url));
+    if (!res.ok) return null;
+    const data = await res.json();
+    const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    return price > 0 ? price : null;
+  } catch(e) { return null; }
 }
 
 async function updatePricesFromAPI(){
-  const key = getFinnhubKey();
-  if(!key){
-    alert('Necesitas una API Key gratuita de Finnhub (sin tarjeta).\n\n1. Ve a finnhub.io → Sign up\n2. Copia tu API Key del dashboard\n3. Pégala en el campo del header\n\nO usa "✎ Manual" para actualizar precios manualmente.');
-    return;
-  }
-  syncFinnhubKey(key);
-
   const btn    = document.getElementById('btn-update-prices');
   const status = document.getElementById('price-status');
   btn.disabled = true;
   status.style.color = 'var(--accent2)';
-  status.textContent  = 'Consultando precios...';
+  status.textContent  = 'Consultando Yahoo Finance...';
 
-  // Lista de pares: ticker interno ↔ ticker Finnhub (mismo formato que FMP para europeos)
   const tickerPairs = positions.map(p => ({
     internal: p.ticker,
     ext: EUR_TICKER_MAP[p.ticker] || p.ticker,
     currency: p.currency
   }));
   const unique  = [...new Map(tickerPairs.map(t => [t.ext, t])).values()];
-  const results = {}; // ext ticker → price
+  const results = {};
 
-  // Finnhub no soporta batch: llamadas individuales en grupos de 10
-  // Plan free: 60 req/min → grupos de 10 con 1.1 s de pausa entre grupos
-  const BATCH = 10;
+  // Grupos de 5 con pausa para no saturar el proxy
+  const BATCH = 5;
   for(let i = 0; i < unique.length; i += BATCH){
     const batch = unique.slice(i, i + BATCH);
     status.textContent = `Consultando ${Math.min(i + BATCH, unique.length)}/${unique.length} tickers...`;
 
     const batchResults = await Promise.all(batch.map(async ({ext}) => {
-      try{
-        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ext}&token=${key}`);
-        if(!res.ok) return null;
-        const data = await res.json();
-        return (data && data.c > 0) ? {ext, price: data.c} : null;
-      }catch(e){ return null; }
+      const price = await fetchYahooPrice(ext);
+      return price != null ? {ext, price} : null;
     }));
 
     batchResults.forEach(r => { if(r) results[r.ext] = r.price; });
-    if(i + BATCH < unique.length) await new Promise(r => setTimeout(r, 1100));
+    if(i + BATCH < unique.length) await new Promise(r => setTimeout(r, 600));
   }
 
   let updated = 0;
@@ -445,7 +426,7 @@ async function updatePricesFromAPI(){
     const ext = EUR_TICKER_MAP[p.ticker] || p.ticker;
     if(results[ext] != null){
       let price = parseFloat(results[ext]);
-      // Finnhub devuelve acciones UK en GBX (peniques) → convertir a GBP si price > 100
+      // Yahoo devuelve acciones UK en GBX (peniques) → convertir a GBP si price > 100
       if(p.currency === 'GBP' && price > 100) price = price / 100;
       p.price = +price.toFixed(4);
       updated++;
@@ -461,7 +442,7 @@ async function updatePricesFromAPI(){
   if(errors.length){
     status.style.color   = 'var(--yellow)';
     status.textContent   = `✓ ${updated} actualizados ${ts} · sin datos: ${errors.join(', ')}`;
-    console.warn('Sin precio en Finnhub:', errors);
+    console.warn('Sin precio en Yahoo Finance:', errors);
   } else {
     status.style.color   = 'var(--accent)';
     status.textContent   = `✓ ${updated} precios actualizados ${ts}`;
@@ -469,20 +450,37 @@ async function updatePricesFromAPI(){
 }
 
 // ══════════════════════════════════════════════
-// FMP — FUNDAMENTALES (plan gratuito, ratios TTM)
-// Registro: financialmodelingprep.com/register-free
+// YAHOO FINANCE — FUNDAMENTALES (sin API Key)
 // ══════════════════════════════════════════════
-const FMP_KEY_STORE = 'fmp_key_v9';
-
-function getFMPKey(){
-  return (document.getElementById('fmp-key')||{value:''}).value.trim()
-      || localStorage.getItem(FMP_KEY_STORE) || '';
-}
-function syncFMPKey(val){
-  if(!val) return;
-  localStorage.setItem(FMP_KEY_STORE, val);
-  const f = document.getElementById('fmp-key');
-  if(f && f.value !== val) f.value = val;
+async function fetchYahooFundamentals(ticker) {
+  const modules = 'financialData,defaultKeyStatistics,summaryDetail';
+  const url = `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${ticker}?modules=${modules}`;
+  try {
+    const res = await fetch(CORS_PROXY + encodeURIComponent(url));
+    if (!res.ok) return null;
+    const data = await res.json();
+    const result = data?.quoteSummary?.result?.[0];
+    if (!result) return null;
+    const fd = result.financialData || {};
+    const ks = result.defaultKeyStatistics || {};
+    const sd = result.summaryDetail || {};
+    const raw = v => (v && typeof v === 'object' && v.raw !== undefined) ? v.raw : (typeof v === 'number' ? v : null);
+    const safe = (v, mult = 1) => {
+      const n = parseFloat(raw(v));
+      return (!isNaN(n) && isFinite(n)) ? +(n * mult).toFixed(4) : null;
+    };
+    return {
+      pe:         safe(ks.trailingPE),
+      ev_ebitda:  safe(ks.enterpriseToEbitda),
+      roe:        safe(fd.returnOnEquity, 100),
+      de:         safe(fd.debtToEquity, 0.01),
+      dn_ebitda:  null,
+      rev_growth: safe(fd.revenueGrowth, 100),
+      fcf_growth: null,
+      div_yield:  safe(sd.dividendYield, 100),
+      payout:     safe(sd.payoutRatio, 100)
+    };
+  } catch(e) { return null; }
 }
 
 const DEFAULTS = [
@@ -886,15 +884,8 @@ function calcValuation(f){
   return                 {label:'Cuidado', cls:'cb'};
 }
 
-// ── Actualización usando FMP directamente (sin Anthropic) ──
+// ── Actualización usando Yahoo Finance (sin API Key) ──
 async function updateFundamentals(){
-  const key = getFMPKey();
-  if(!key){
-    alert('Introduce tu API Key de Financial Modeling Prep.\nRegistro gratuito en: financialmodelingprep.com/register-free');
-    return;
-  }
-  syncFMPKey(key);
-
   const tickers = [...new Set(positions.map(p => p.ticker))];
 
   document.getElementById('fund-loading').style.display    = 'block';
@@ -907,51 +898,13 @@ async function updateFundamentals(){
 
   for(let i = 0; i < tickers.length; i++){
     const ticker = tickers[i];
-    const fmpT   = EUR_TICKER_MAP[ticker] || ticker;
+    const yahooT = EUR_TICKER_MAP[ticker] || ticker;
     document.getElementById('fund-progress').textContent = i + 1;
 
-    try{
-      // 3 llamadas en paralelo por ticker para minimizar tiempo total
-      const [ratiosRes, metricsRes, growthRes] = await Promise.all([
-        fetch(`https://financialmodelingprep.com/api/v3/ratios-ttm/${fmpT}?apikey=${key}`),
-        fetch(`https://financialmodelingprep.com/api/v3/key-metrics-ttm/${fmpT}?apikey=${key}`),
-        fetch(`https://financialmodelingprep.com/api/v3/financial-growth/${fmpT}?limit=1&apikey=${key}`)
-      ]);
+    const f = await fetchYahooFundamentals(yahooT);
+    fundData[ticker] = f || {pe:null,ev_ebitda:null,roe:null,de:null,dn_ebitda:null,rev_growth:null,fcf_growth:null,div_yield:null,payout:null};
 
-      const [ratios, metrics, growth] = await Promise.all([
-        ratiosRes.ok  ? ratiosRes.json()  : null,
-        metricsRes.ok ? metricsRes.json() : null,
-        growthRes.ok  ? growthRes.json()  : null
-      ]);
-
-      const r = (Array.isArray(ratios)  && ratios[0])  ? ratios[0]  : (ratios  && !Array.isArray(ratios)  ? ratios  : {});
-      const m = (Array.isArray(metrics) && metrics[0]) ? metrics[0] : (metrics && !Array.isArray(metrics) ? metrics : {});
-      const g = (Array.isArray(growth)  && growth[0])  ? growth[0]  : {};
-
-      const safe = (v, mult = 1) => {
-        const n = parseFloat(v);
-        return (!isNaN(n) && isFinite(n)) ? +(n * mult).toFixed(4) : null;
-      };
-
-      fundData[ticker] = {
-        pe:         safe(r.peRatioTTM),
-        ev_ebitda:  safe(m.enterpriseValueOverEBITDATTM),
-        roe:        safe(r.returnOnEquityTTM,         100), // decimal → %
-        de:         safe(r.debtEquityRatioTTM),
-        dn_ebitda:  safe(m.netDebtToEBITDATTM),
-        rev_growth: safe(g.revenueGrowth,              100), // decimal → %
-        fcf_growth: safe(g.freeCashFlowGrowth,         100), // decimal → %
-        div_yield:  safe(r.dividendYieldPercentageTTM),      // ya en %
-        payout:     safe(r.payoutRatioTTM,             100)  // decimal → %
-      };
-
-    }catch(e){
-      console.warn(`FMP error para ${ticker}:`, e);
-      fundData[ticker] = {pe:null,ev_ebitda:null,roe:null,de:null,dn_ebitda:null,rev_growth:null,fcf_growth:null,div_yield:null,payout:null};
-    }
-
-    // Pausa entre tickers para no saturar el límite de la API gratuita (250 calls/día)
-    if(i < tickers.length - 1) await new Promise(r => setTimeout(r, 200));
+    if(i < tickers.length - 1) await new Promise(r => setTimeout(r, 400));
   }
 
   localStorage.setItem(FUND_CACHE_KEY, JSON.stringify({data: fundData, timestamp: new Date().toISOString()}));
@@ -960,7 +913,7 @@ async function updateFundamentals(){
   const found = Object.values(fundData).filter(f => Object.values(f).some(v => v !== null)).length;
   if(found === 0){
     document.getElementById('fund-empty').style.display = 'block';
-    document.getElementById('fund-meta').textContent    = 'Sin datos. Verifica que tu API Key de FMP es correcta.';
+    document.getElementById('fund-meta').textContent    = 'Sin datos. Yahoo Finance no devolvió resultados.';
     return;
   }
   renderFundamentalsTable(fundData);
@@ -978,7 +931,7 @@ function renderFundamentals(){
   const age   = Math.floor((new Date() - new Date(cache.timestamp)) / 1000 / 60);
   const found = Object.values(cache.data).filter(f => Object.values(f).some(v => v !== null)).length;
   document.getElementById('fund-meta').textContent =
-    `Actualizado hace ${age < 60 ? age + ' min' : Math.floor(age/60) + ' h'} · ${found} tickers con datos · Financial Modeling Prep`;
+    `Actualizado hace ${age < 60 ? age + ' min' : Math.floor(age/60) + ' h'} · ${found} tickers con datos · Yahoo Finance`;
   renderFundamentalsTable(cache.data);
 }
 
@@ -1015,19 +968,13 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if(e.target===el) el.classList.remove('open'); });
 });
 
-// Precargar keys guardadas desde localStorage
+// Cargar fundamentales desde caché si existen
 (function(){
-  const fk = localStorage.getItem(FINNHUB_KEY_STORE);
-  if(fk){
-    const h = document.getElementById('finnhub-key');
-    if(h) h.value = fk;
+  const cache = JSON.parse(localStorage.getItem(FUND_CACHE_KEY) || 'null');
+  if(cache && cache.data){
+    const age = Math.floor((new Date() - new Date(cache.timestamp)) / 1000 / 60);
     const s = document.getElementById('price-status');
-    if(s){ s.style.color = 'var(--accent)'; s.textContent = 'Finnhub Key cargada ✓'; }
-  }
-  const mk = localStorage.getItem(FMP_KEY_STORE);
-  if(mk){
-    const f = document.getElementById('fmp-key');
-    if(f) f.value = mk;
+    if(s && age < 60) s.textContent = 'Precios via Yahoo Finance · sin API Key';
   }
 })();
 </script>
